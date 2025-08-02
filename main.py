@@ -15,6 +15,29 @@ from responder import ResponseGenerator
 # Load environment variables
 load_dotenv()
 
+async def start_http_server():
+    """Start a simple HTTP server to keep Railway from stopping the container."""
+    import aiohttp
+    from aiohttp import web
+    
+    async def health_check(request):
+        return web.Response(text="Bot is running! 🚀")
+    
+    app = web.Application()
+    app.router.add_get('/', health_check)
+    app.router.add_get('/health', health_check)
+    
+    runner = web.AppRunner(app)
+    await runner.setup()
+    
+    # Get port from Railway environment or use default
+    port = int(os.getenv('PORT', 8080))
+    site = web.TCPSite(runner, '0.0.0.0', port)
+    await site.start()
+    
+    print(f"🌐 HTTP server started on port {port}")
+    return runner
+
 async def main():
     """Main function to run the sentiment analysis bot."""
     print("Starting Bluesky Sentiment Analysis Bot...")
@@ -25,6 +48,9 @@ async def main():
         print(f"   Python version: {sys.version}")
         print(f"   Working directory: {os.getcwd()}")
         print(f"   Files in directory: {os.listdir('.')}")
+        
+        # Start HTTP server first
+        http_runner = await start_http_server()
         
         # Initialize components
         print("🔧 Initializing components...")
