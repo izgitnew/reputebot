@@ -132,6 +132,10 @@ class BlueskyClient:
             self.password = os.getenv('BLUESKY_PASSWORD')
             
             # Debug: Check if environment variables are loaded
+            print(f"🔍 Debug - Environment variables:")
+            print(f"   BLUESKY_HANDLE: '{self.username}' (length: {len(self.username) if self.username else 0})")
+            print(f"   BLUESKY_PASSWORD: '{self.password[:4]}...' (length: {len(self.password) if self.password else 0})")
+            
             if not self.username or not self.password:
                 print("⚠️ Environment variables not found:")
                 print(f"   BLUESKY_HANDLE: {'Set' if self.username else 'Not set'}")
@@ -140,10 +144,13 @@ class BlueskyClient:
                 raise ValueError("BLUESKY_HANDLE and BLUESKY_PASSWORD must be set as environment variables (either in .env file or system environment)")
         
         try:
+            print(f"🔐 Attempting login with username: {self.username}")
             self.client.login(self.username, self.password)
             print(f"✅ Logged in as {self.username}")
         except Exception as e:
             print(f"❌ Login failed: {e}")
+            print(f"❌ Error type: {type(e)}")
+            print(f"❌ Error details: {str(e)}")
             raise
 
     async def get_notifications(self, limit: int = 20) -> List[Dict[str, Any]]:
