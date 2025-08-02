@@ -134,7 +134,9 @@ class BlueskyClient:
             # Debug: Check if environment variables are loaded
             print(f"🔍 Debug - Environment variables:")
             print(f"   BLUESKY_HANDLE: '{self.username}' (length: {len(self.username) if self.username else 0})")
-            print(f"   BLUESKY_PASSWORD: '{self.password[:4]}...' (length: {len(self.password) if self.password else 0})")
+            print(f"   BLUESKY_PASSWORD: '{self.password}' (length: {len(self.password) if self.password else 0})")
+            print(f"   BLUESKY_PASSWORD raw: {repr(self.password)}")
+            print(f"   All env vars starting with BLUESKY: {[k for k in os.environ.keys() if k.startswith('BLUESKY')]}")
             
             if not self.username or not self.password:
                 print("⚠️ Environment variables not found:")
