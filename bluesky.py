@@ -204,8 +204,8 @@ class BlueskyClient:
             total_fetched = 0
             
             while True:
-                # Prepare request parameters
-                params = {'actor': handle, 'limit': 100}  # Max allowed by API
+                # Prepare request parameters - use smaller batch to avoid video embeds
+                params = {'actor': handle, 'limit': 20}  # Smaller batch to avoid video embeds
                 if cursor:
                     params['cursor'] = cursor
                 
@@ -219,7 +219,14 @@ class BlueskyClient:
                 # Handle case where response is None due to video embed issues
                 if response is None:
                     print(f"⚠️ Skipping batch due to video embed validation errors for @{handle}")
-                    break
+                    # Try with a smaller limit to avoid video embeds
+                    if params.get('limit', 100) > 10:
+                        print(f"🔄 Retrying with smaller batch size for @{handle}")
+                        params['limit'] = 10
+                        continue
+                    else:
+                        print(f"❌ Failed to fetch posts even with small batch for @{handle}")
+                        break
                 
                 batch_posts = response.feed
                 total_fetched += len(batch_posts)
@@ -273,8 +280,8 @@ class BlueskyClient:
             total_fetched = 0
             
             while True:
-                # Prepare request parameters
-                params = {'actor': handle, 'limit': 100}  # Max allowed by API
+                # Prepare request parameters - use smaller batch to avoid video embeds
+                params = {'actor': handle, 'limit': 20}  # Smaller batch to avoid video embeds
                 if cursor:
                     params['cursor'] = cursor
                 
@@ -288,7 +295,14 @@ class BlueskyClient:
                 # Handle case where response is None due to video embed issues
                 if response is None:
                     print(f"⚠️ Skipping batch due to video embed validation errors for @{handle}")
-                    break
+                    # Try with a smaller limit to avoid video embeds
+                    if params.get('limit', 100) > 10:
+                        print(f"🔄 Retrying with smaller batch size for @{handle}")
+                        params['limit'] = 10
+                        continue
+                    else:
+                        print(f"❌ Failed to fetch posts even with small batch for @{handle}")
+                        break
                 
                 batch_posts = response.feed
                 total_fetched += len(batch_posts)
@@ -713,6 +727,18 @@ class BlueskyClient:
                         if notification_time < self.last_processed_timestamp:
                             print(f"⏭️ Skipping old notification from {notification_time}")
                             continue
+                    
+                    # Additional filter: only process mentions from the last 24 hours
+                    from datetime import datetime, timedelta, timezone
+                    if notification_time:
+                        try:
+                            notification_dt = datetime.fromisoformat(notification_time.replace('Z', '+00:00'))
+                            cutoff_time = datetime.now(timezone.utc) - timedelta(hours=24)
+                            if notification_dt < cutoff_time:
+                                print(f"⏭️ Skipping notification older than 24 hours: {notification_time}")
+                                continue
+                        except:
+                            pass  # If we can't parse the timestamp, continue
                     
                     filtered_notifications.append(notification)
                 
