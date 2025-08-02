@@ -209,24 +209,59 @@ class BlueskyClient:
                 if cursor:
                     params['cursor'] = cursor
                 
-                # Fetch batch of posts
-                response = await queue_manager.add_request(
-                    RequestType.GET_AUTHOR_POSTS,
-                    self.client.app.bsky.feed.get_author_feed,
-                    params
-                )
-                
-                # Handle case where response is None due to video embed issues
-                if response is None:
-                    print(f"⚠️ Skipping batch due to video embed validation errors for @{handle}")
-                    # Try with a smaller limit to avoid video embeds
-                    if params.get('limit', 100) > 10:
-                        print(f"🔄 Retrying with smaller batch size for @{handle}")
-                        params['limit'] = 10
-                        continue
-                    else:
-                        print(f"❌ Failed to fetch posts even with small batch for @{handle}")
-                        break
+                # Use raw HTTP request to bypass video embed validation
+                try:
+                    import aiohttp
+                    import json
+                    
+                    # Get the session from the client
+                    session = self.client._session
+                    base_url = "https://bsky.social/xrpc/app.bsky.feed.getAuthorFeed"
+                    
+                    # Prepare headers
+                    headers = {
+                        'Authorization': f'Bearer {self.client.session.access_jwt}',
+                        'Content-Type': 'application/json'
+                    }
+                    
+                    # Make raw request
+                    async with session.post(base_url, headers=headers, json=params) as resp:
+                        if resp.status == 200:
+                            raw_data = await resp.json()
+                            
+                            # Manually filter out posts with video embeds
+                            filtered_feed = []
+                            for item in raw_data.get('feed', []):
+                                post = item.get('post', {})
+                                embed = post.get('embed')
+                                
+                                # Skip posts with video embeds
+                                if embed and embed.get('$type') == 'app.bsky.embed.video#view':
+                                    continue
+                                
+                                # Create a simple post object with just the text and timestamp
+                                if 'record' in post and 'text' in post['record']:
+                                    filtered_feed.append({
+                                        'post': {
+                                            'record': {
+                                                'text': post['record']['text'],
+                                                'created_at': post['record']['created_at']
+                                            }
+                                        }
+                                    })
+                            
+                            # Convert to a simple response object
+                            response = type('Response', (), {
+                                'feed': filtered_feed,
+                                'cursor': raw_data.get('cursor')
+                            })()
+                        else:
+                            print(f"❌ HTTP error {resp.status} for @{handle}")
+                            break
+                            
+                except Exception as e:
+                    print(f"❌ Error fetching posts for @{handle}: {e}")
+                    break
                 
                 batch_posts = response.feed
                 total_fetched += len(batch_posts)
@@ -285,47 +320,58 @@ class BlueskyClient:
                 if cursor:
                     params['cursor'] = cursor
                 
-                # Fetch batch of posts
-                response = await queue_manager.add_request(
-                    RequestType.GET_AUTHOR_POSTS,
-                    self.client.app.bsky.feed.get_author_feed,
-                    params
-                )
-                
-                # Handle case where response is None due to video embed issues
-                if response is None:
-                    print(f"⚠️ Skipping batch due to video embed validation errors for @{handle}")
-                    # Try with a smaller limit to avoid video embeds
-                    if params.get('limit', 100) > 10:
-                        print(f"🔄 Retrying with smaller batch size for @{handle}")
-                        params['limit'] = 10
-                        continue
-                    else:
-                        print(f"❌ Failed to fetch posts even with small batch for @{handle}")
-                        break
-                
-                batch_posts = response.feed
-                total_fetched += len(batch_posts)
-                
-                # Extract only timestamps from posts within our time range
-                old_posts_found = False
-                for post in batch_posts:
-                    if hasattr(post, 'post') and hasattr(post.post, 'record') and hasattr(post.post.record, 'created_at'):
-                        timestamp = post.post.record.created_at
-                        post_time = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
-                        if post_time >= cutoff_time:
-                            timestamps.append(timestamp)
+                # Use raw HTTP request to bypass video embed validation
+                try:
+                    import aiohttp
+                    import json
+                    
+                    # Get the session from the client
+                    session = self.client._session
+                    base_url = "https://bsky.social/xrpc/app.bsky.feed.getAuthorFeed"
+                    
+                    # Prepare headers
+                    headers = {
+                        'Authorization': f'Bearer {self.client.session.access_jwt}',
+                        'Content-Type': 'application/json'
+                    }
+                    
+                    # Make raw request
+                    async with session.post(base_url, headers=headers, json=params) as resp:
+                        if resp.status == 200:
+                            raw_data = await resp.json()
+                            
+                            # Manually filter out posts with video embeds and extract timestamps
+                            for item in raw_data.get('feed', []):
+                                post = item.get('post', {})
+                                embed = post.get('embed')
+                                
+                                # Skip posts with video embeds
+                                if embed and embed.get('$type') == 'app.bsky.embed.video#view':
+                                    continue
+                                
+                                # Extract timestamp
+                                if 'record' in post and 'created_at' in post['record']:
+                                    timestamp = post['record']['created_at']
+                                    post_time = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                                    if post_time >= cutoff_time:
+                                        timestamps.append(timestamp)
+                                    else:
+                                        # Found old post, stop processing
+                                        break
+                            
+                            # Get cursor for next batch
+                            cursor = raw_data.get('cursor')
                         else:
-                            old_posts_found = True
+                            print(f"❌ HTTP error {resp.status} for @{handle}")
                             break
-                
-                # If we found old posts, we've reached our time limit
-                if old_posts_found:
+                            
+                except Exception as e:
+                    print(f"❌ Error fetching timestamps for @{handle}: {e}")
                     break
                 
                 # Check if we have more posts to fetch
-                if hasattr(response, 'cursor') and response.cursor:
-                    cursor = response.cursor
+                if cursor:
+                    continue
                 else:
                     break
                 

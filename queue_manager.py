@@ -195,8 +195,9 @@ class QueueManager:
                 if "union_tag_invalid" in error_str and "app.bsky.embed.video#view" in error_str:
                     # This is a video embed validation error - handle gracefully
                     self.logger.info(f"Skipping video embed in {request.request_type.value} (validation error)")
-                    # Don't return None, let the error propagate so we can handle it properly
-                    raise e
+                    request.result = None  # Return None instead of raising error
+                    self.stats["successful_requests"] += 1
+                    continue
                 
                 self.stats["failed_requests"] += 1
                 request.error = e
