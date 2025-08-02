@@ -17,6 +17,7 @@ class RequestType(Enum):
     GET_AUTHOR_POSTS = "get_author_posts"
     GET_POST_THREAD = "get_post_thread"
     MARK_NOTIFICATION_READ = "mark_notification_read"
+    GET_PROFILE = "get_profile"
 
 @dataclass
 class QueuedRequest:
@@ -45,6 +46,7 @@ class RateLimiter:
             RequestType.GET_AUTHOR_POSTS: {"requests": 20, "window": 60},  # 20 requests per minute
             RequestType.GET_POST_THREAD: {"requests": 30, "window": 60},  # 30 requests per minute
             RequestType.MARK_NOTIFICATION_READ: {"requests": 50, "window": 60},  # 50 requests per minute
+            RequestType.GET_PROFILE: {"requests": 30, "window": 60},  # 30 requests per minute
         }
         
         # Track request timestamps

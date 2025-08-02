@@ -31,6 +31,8 @@ class BlueskyClient:
         self.processed_notifications = set()
         # Track the latest notification timestamp we've processed
         self.last_processed_timestamp = None
+        # Track when the bot started - only process mentions after this time
+        self.bot_start_time = None
         # Don't load files during initialization - will be loaded when monitoring starts
     
     def _load_last_timestamp(self):
@@ -157,8 +159,7 @@ class BlueskyClient:
             # Debug: Check if environment variables are loaded
             print(f"🔍 Debug - Environment variables:")
             print(f"   BLUESKY_HANDLE: '{self.username}' (length: {len(self.username) if self.username else 0})")
-            print(f"   BLUESKY_PASSWORD: '{self.password}' (length: {len(self.password) if self.password else 0})")
-            print(f"   BLUESKY_PASSWORD raw: {repr(self.password)}")
+            print(f"   BLUESKY_PASSWORD: {'*' * len(self.password) if self.password else 'Not set'} (length: {len(self.password) if self.password else 0})")
             print(f"   All env vars starting with BLUESKY: {[k for k in os.environ.keys() if k.startswith('BLUESKY')]}")
             
             if not self.username or not self.password:
@@ -259,6 +260,20 @@ class BlueskyClient:
                             print(f"❌ HTTP error {resp.status} for @{handle}")
                             break
                             
+                except ImportError:
+                    print(f"⚠️ aiohttp not available, falling back to atproto method for @{handle}")
+                    # Fallback to original method
+                    response = await queue_manager.add_request(
+                        RequestType.GET_AUTHOR_POSTS,
+                        self.client.app.bsky.feed.get_author_feed,
+                        params
+                    )
+                    
+                    # Handle case where response is None due to video embed issues
+                    if response is None:
+                        print(f"⚠️ Skipping batch due to video embed validation errors for @{handle}")
+                        break
+                        
                 except Exception as e:
                     print(f"❌ Error fetching posts for @{handle}: {e}")
                     break
@@ -365,6 +380,35 @@ class BlueskyClient:
                             print(f"❌ HTTP error {resp.status} for @{handle}")
                             break
                             
+                except ImportError:
+                    print(f"⚠️ aiohttp not available, falling back to atproto method for @{handle}")
+                    # Fallback to original method
+                    response = await queue_manager.add_request(
+                        RequestType.GET_AUTHOR_POSTS,
+                        self.client.app.bsky.feed.get_author_feed,
+                        params
+                    )
+                    
+                    # Handle case where response is None due to video embed issues
+                    if response is None:
+                        print(f"⚠️ Skipping batch due to video embed validation errors for @{handle}")
+                        break
+                    
+                    # Extract timestamps from response
+                    batch_posts = response.feed
+                    for post in batch_posts:
+                        if hasattr(post, 'post') and hasattr(post.post, 'record') and hasattr(post.post.record, 'created_at'):
+                            timestamp = post.post.record.created_at
+                            post_time = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                            if post_time >= cutoff_time:
+                                timestamps.append(timestamp)
+                            else:
+                                # Found old post, stop processing
+                                break
+                    
+                    # Get cursor for next batch
+                    cursor = response.cursor if hasattr(response, 'cursor') else None
+                        
                 except Exception as e:
                     print(f"❌ Error fetching timestamps for @{handle}: {e}")
                     break
@@ -449,14 +493,44 @@ class BlueskyClient:
                 parent_uri = thread.post.record.reply.parent.uri
                 print(f"🔍 Detected reply, parent URI: {parent_uri}")
                 
-                parent_thread = await self.get_post_thread(parent_uri)
+                # Try to get parent thread, but don't fail if it has video embeds
+                try:
+                    parent_thread = await self.get_post_thread(parent_uri)
+                    
+                    if parent_thread and hasattr(parent_thread, 'post') and hasattr(parent_thread.post, 'author'):
+                        target_handle = parent_thread.post.author.handle
+                        print(f"🎯 Analyzing original post author: @{target_handle}")
+                        return target_handle
+                    else:
+                        print("⚠️ Could not get parent post author from thread")
+                except Exception as e:
+                    print(f"⚠️ Error getting parent thread: {e}")
                 
-                if parent_thread and hasattr(parent_thread, 'post') and hasattr(parent_thread.post, 'author'):
-                    target_handle = parent_thread.post.author.handle
-                    print(f"🎯 Analyzing original post author: @{target_handle}")
-                    return target_handle
-                else:
-                    print("⚠️ Could not get parent post author")
+                # Fallback: try to extract handle from the parent URI
+                try:
+                    # Parent URI format: at://did:plc:xxx/app.bsky.feed.post/xxx
+                    # We need to get the DID and then resolve it to a handle
+                    if 'at://' in parent_uri and '/app.bsky.feed.post/' in parent_uri:
+                        did = parent_uri.split('at://')[1].split('/app.bsky.feed.post/')[0]
+                        print(f"🔍 Extracting DID from parent URI: {did}")
+                        
+                        # Try to resolve DID to handle
+                        try:
+                            profile = await queue_manager.add_request(
+                                RequestType.GET_PROFILE,
+                                self.client.app.bsky.actor.get_profile,
+                                {'actor': did}
+                            )
+                            if profile and hasattr(profile, 'handle'):
+                                target_handle = profile.handle
+                                print(f"🎯 Resolved parent DID to handle: @{target_handle}")
+                                return target_handle
+                        except Exception as e:
+                            print(f"⚠️ Could not resolve DID to handle: {e}")
+                except Exception as e:
+                    print(f"⚠️ Error extracting DID from parent URI: {e}")
+                
+                print("⚠️ Could not determine parent post author, falling back to mention author")
             else:
                 print("ℹ️ Not a reply, analyzing mention author")
             
@@ -725,6 +799,11 @@ class BlueskyClient:
             self.last_processed_timestamp = None
             print("🔄 Memory cleared - starting completely fresh")
         
+        # Set the bot start time - only process mentions that arrive after this
+        from datetime import datetime, timezone, timedelta
+        self.bot_start_time = datetime.now(timezone.utc) - timedelta(seconds=30)  # 30 second buffer
+        print(f"🕐 Bot started at: {self.bot_start_time.isoformat()}")
+        
         print("📡 Starting mention monitoring...")
         print(f"🤖 Bot handle: @{self.username}")
         print("💬 Will respond to posts that mention the bot")
@@ -774,17 +853,20 @@ class BlueskyClient:
                             print(f"⏭️ Skipping old notification from {notification_time}")
                             continue
                     
-                    # Additional filter: only process mentions from the last 24 hours
+                    # Filter: only process mentions that arrived AFTER the bot started
                     from datetime import datetime, timedelta, timezone
-                    if notification_time:
+                    if notification_time and self.bot_start_time:
                         try:
                             notification_dt = datetime.fromisoformat(notification_time.replace('Z', '+00:00'))
-                            cutoff_time = datetime.now(timezone.utc) - timedelta(hours=24)
-                            if notification_dt < cutoff_time:
-                                print(f"⏭️ Skipping notification older than 24 hours: {notification_time}")
+                            
+                            # Only process mentions that arrived after the bot started
+                            if notification_dt < self.bot_start_time:
+                                print(f"⏭️ Skipping notification from before bot started: {notification_time}")
                                 continue
-                        except:
-                            pass  # If we can't parse the timestamp, continue
+                        except Exception as e:
+                            print(f"⚠️ Error parsing notification timestamp {notification_time}: {e}")
+                            # If we can't parse the timestamp, skip it to be safe
+                            continue
                     
                     filtered_notifications.append(notification)
                 

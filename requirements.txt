@@ -1,3 +1,4 @@
 atproto==0.0.39
 vaderSentiment==3.3.2
-python-dotenv==1.0.1 
+python-dotenv==1.0.1
+aiohttp==3.9.1 
