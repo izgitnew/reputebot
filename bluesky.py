@@ -31,8 +31,6 @@ class BlueskyClient:
         self.processed_notifications = set()
         # Track the latest notification timestamp we've processed
         self.last_processed_timestamp = None
-        # Track when the bot started - only process mentions after this time
-        self.bot_start_time = None
         # Don't load files during initialization - will be loaded when monitoring starts
     
     def _load_last_timestamp(self):
@@ -159,7 +157,8 @@ class BlueskyClient:
             # Debug: Check if environment variables are loaded
             print(f"🔍 Debug - Environment variables:")
             print(f"   BLUESKY_HANDLE: '{self.username}' (length: {len(self.username) if self.username else 0})")
-            print(f"   BLUESKY_PASSWORD: {'*' * len(self.password) if self.password else 'Not set'} (length: {len(self.password) if self.password else 0})")
+            print(f"   BLUESKY_PASSWORD: '{self.password}' (length: {len(self.password) if self.password else 0})")
+            print(f"   BLUESKY_PASSWORD raw: {repr(self.password)}")
             print(f"   All env vars starting with BLUESKY: {[k for k in os.environ.keys() if k.startswith('BLUESKY')]}")
             
             if not self.username or not self.password:
@@ -205,26 +204,21 @@ class BlueskyClient:
             total_fetched = 0
             
             while True:
-                # Prepare request parameters - use smaller batch to avoid video embeds
-                params = {'actor': handle, 'limit': 20}  # Smaller batch to avoid video embeds
+                # Prepare request parameters
+                params = {'actor': handle, 'limit': 100}  # Max allowed by API
                 if cursor:
                     params['cursor'] = cursor
                 
-                # Use the queue manager method to avoid session issues
-                try:
-                    response = await queue_manager.add_request(
-                        RequestType.GET_AUTHOR_POSTS,
-                        self.client.app.bsky.feed.get_author_feed,
-                        params
-                    )
-                    
-                    # Handle case where response is None due to video embed issues
-                    if response is None:
-                        print(f"⚠️ Skipping batch due to video embed validation errors for @{handle}")
-                        break
-                        
-                except Exception as e:
-                    print(f"❌ Error fetching posts for @{handle}: {e}")
+                # Fetch batch of posts
+                response = await queue_manager.add_request(
+                    RequestType.GET_AUTHOR_POSTS,
+                    self.client.app.bsky.feed.get_author_feed,
+                    params
+                )
+                
+                # Handle case where response is None due to video embed issues
+                if response is None:
+                    print(f"⚠️ Skipping batch due to video embed validation errors for @{handle}")
                     break
                 
                 batch_posts = response.feed
@@ -279,46 +273,45 @@ class BlueskyClient:
             total_fetched = 0
             
             while True:
-                # Prepare request parameters - use smaller batch to avoid video embeds
-                params = {'actor': handle, 'limit': 20}  # Smaller batch to avoid video embeds
+                # Prepare request parameters
+                params = {'actor': handle, 'limit': 100}  # Max allowed by API
                 if cursor:
                     params['cursor'] = cursor
                 
-                # Use the queue manager method to avoid session issues
-                try:
-                    response = await queue_manager.add_request(
-                        RequestType.GET_AUTHOR_POSTS,
-                        self.client.app.bsky.feed.get_author_feed,
-                        params
-                    )
-                    
-                    # Handle case where response is None due to video embed issues
-                    if response is None:
-                        print(f"⚠️ Skipping batch due to video embed validation errors for @{handle}")
-                        break
-                    
-                    # Extract timestamps from response
-                    batch_posts = response.feed
-                    for post in batch_posts:
-                        if hasattr(post, 'post') and hasattr(post.post, 'record') and hasattr(post.post.record, 'created_at'):
-                            timestamp = post.post.record.created_at
-                            post_time = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
-                            if post_time >= cutoff_time:
-                                timestamps.append(timestamp)
-                            else:
-                                # Found old post, stop processing
-                                break
-                    
-                    # Get cursor for next batch
-                    cursor = response.cursor if hasattr(response, 'cursor') else None
-                        
-                except Exception as e:
-                    print(f"❌ Error fetching timestamps for @{handle}: {e}")
+                # Fetch batch of posts
+                response = await queue_manager.add_request(
+                    RequestType.GET_AUTHOR_POSTS,
+                    self.client.app.bsky.feed.get_author_feed,
+                    params
+                )
+                
+                # Handle case where response is None due to video embed issues
+                if response is None:
+                    print(f"⚠️ Skipping batch due to video embed validation errors for @{handle}")
+                    break
+                
+                batch_posts = response.feed
+                total_fetched += len(batch_posts)
+                
+                # Extract only timestamps from posts within our time range
+                old_posts_found = False
+                for post in batch_posts:
+                    if hasattr(post, 'post') and hasattr(post.post, 'record') and hasattr(post.post.record, 'created_at'):
+                        timestamp = post.post.record.created_at
+                        post_time = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                        if post_time >= cutoff_time:
+                            timestamps.append(timestamp)
+                        else:
+                            old_posts_found = True
+                            break
+                
+                # If we found old posts, we've reached our time limit
+                if old_posts_found:
                     break
                 
                 # Check if we have more posts to fetch
-                if cursor:
-                    continue
+                if hasattr(response, 'cursor') and response.cursor:
+                    cursor = response.cursor
                 else:
                     break
                 
@@ -396,44 +389,14 @@ class BlueskyClient:
                 parent_uri = thread.post.record.reply.parent.uri
                 print(f"🔍 Detected reply, parent URI: {parent_uri}")
                 
-                # Try to get parent thread, but don't fail if it has video embeds
-                try:
-                    parent_thread = await self.get_post_thread(parent_uri)
-                    
-                    if parent_thread and hasattr(parent_thread, 'post') and hasattr(parent_thread.post, 'author'):
-                        target_handle = parent_thread.post.author.handle
-                        print(f"🎯 Analyzing original post author: @{target_handle}")
-                        return target_handle
-                    else:
-                        print("⚠️ Could not get parent post author from thread")
-                except Exception as e:
-                    print(f"⚠️ Error getting parent thread: {e}")
+                parent_thread = await self.get_post_thread(parent_uri)
                 
-                # Fallback: try to extract handle from the parent URI
-                try:
-                    # Parent URI format: at://did:plc:xxx/app.bsky.feed.post/xxx
-                    # We need to get the DID and then resolve it to a handle
-                    if 'at://' in parent_uri and '/app.bsky.feed.post/' in parent_uri:
-                        did = parent_uri.split('at://')[1].split('/app.bsky.feed.post/')[0]
-                        print(f"🔍 Extracting DID from parent URI: {did}")
-                        
-                        # Try to resolve DID to handle
-                        try:
-                            profile = await queue_manager.add_request(
-                                RequestType.GET_PROFILE,
-                                self.client.app.bsky.actor.get_profile,
-                                {'actor': did}
-                            )
-                            if profile and hasattr(profile, 'handle'):
-                                target_handle = profile.handle
-                                print(f"🎯 Resolved parent DID to handle: @{target_handle}")
-                                return target_handle
-                        except Exception as e:
-                            print(f"⚠️ Could not resolve DID to handle: {e}")
-                except Exception as e:
-                    print(f"⚠️ Error extracting DID from parent URI: {e}")
-                
-                print("⚠️ Could not determine parent post author, falling back to mention author")
+                if parent_thread and hasattr(parent_thread, 'post') and hasattr(parent_thread.post, 'author'):
+                    target_handle = parent_thread.post.author.handle
+                    print(f"🎯 Analyzing original post author: @{target_handle}")
+                    return target_handle
+                else:
+                    print("⚠️ Could not get parent post author")
             else:
                 print("ℹ️ Not a reply, analyzing mention author")
             
@@ -704,8 +667,11 @@ class BlueskyClient:
         
         # Set the bot start time - only process mentions that arrive after this
         from datetime import datetime, timezone, timedelta
-        self.bot_start_time = datetime.now(timezone.utc) - timedelta(seconds=30)  # 30 second buffer
+        # Set bot start time to 1 hour ago to catch recent mentions but avoid old ones
+        self.bot_start_time = datetime.now(timezone.utc) - timedelta(hours=1)
         print(f"🕐 Bot started at: {self.bot_start_time.isoformat()}")
+        print(f"🕐 Current time: {datetime.now(timezone.utc).isoformat()}")
+        print(f"🕐 Will process mentions after: {self.bot_start_time.isoformat()}")
         
         print("📡 Starting mention monitoring...")
         print(f"🤖 Bot handle: @{self.username}")
@@ -729,13 +695,6 @@ class BlueskyClient:
                 
                 print(f"📬 Found {len(notifications)} notifications")
                 
-                # Debug: Show all notification details
-                for i, notification in enumerate(notifications[:5]):  # Show first 5
-                    reason = getattr(notification, 'reason', 'unknown')
-                    indexed_at = getattr(notification, 'indexed_at', 'unknown')
-                    uri = getattr(notification, 'uri', 'unknown')[:50]
-                    print(f"  {i+1}. Reason: {reason}, Time: {indexed_at}, URI: {uri}...")
-                
                 # Filter notifications based on timestamp and processed set
                 filtered_notifications = []
                 print(f"🔍 Current last processed timestamp: {self.last_processed_timestamp}")
@@ -749,8 +708,14 @@ class BlueskyClient:
                         print(f"⏭️ Skipping already processed notification: {notification_uri[:50]}...")
                         continue
                     
+                    # Skip if notification is older than our last processed timestamp
+                    # Use < instead of <= to allow processing notifications with the same timestamp
+                    if self.last_processed_timestamp and notification_time:
+                        if notification_time < self.last_processed_timestamp:
+                            print(f"⏭️ Skipping old notification from {notification_time}")
+                            continue
+                    
                     # Only process mentions that arrived AFTER the bot started
-                    from datetime import datetime, timedelta, timezone
                     if notification_time and self.bot_start_time:
                         try:
                             notification_dt = datetime.fromisoformat(notification_time.replace('Z', '+00:00'))
