@@ -79,6 +79,11 @@ dmypy.json
 last_processed_timestamp.txt
 processed_notifications.txt
 
+# Test files (not needed for deployment)
+test_*.py
+debug_*.py
+show_*.py
+
 # IDE files
 .vscode/
 .idea/
