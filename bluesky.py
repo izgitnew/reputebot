@@ -202,10 +202,12 @@ class BlueskyClient:
             all_posts = []
             cursor = None
             total_fetched = 0
+            consecutive_failures = 0
+            max_consecutive_failures = 3
             
             while True:
-                # Prepare request parameters
-                params = {'actor': handle, 'limit': 100}  # Max allowed by API
+                # Prepare request parameters - use smaller batch to reduce video embed issues
+                params = {'actor': handle, 'limit': 20}  # Smaller batch to reduce video embed issues
                 if cursor:
                     params['cursor'] = cursor
                 
@@ -218,8 +220,24 @@ class BlueskyClient:
                 
                 # Handle case where response is None due to video embed issues
                 if response is None:
-                    print(f"⚠️ Skipping batch due to video embed validation errors for @{handle}")
-                    break
+                    consecutive_failures += 1
+                    print(f"⚠️ Batch failed due to video embed validation errors for @{handle} (failure {consecutive_failures}/{max_consecutive_failures})")
+                    
+                    if consecutive_failures >= max_consecutive_failures:
+                        print(f"⚠️ Too many consecutive failures for @{handle}, stopping")
+                        break
+                    
+                    # Try with a smaller limit next time
+                    if params['limit'] > 5:
+                        params['limit'] = max(5, params['limit'] // 2)
+                        print(f"🔄 Reducing batch size to {params['limit']} for @{handle}")
+                        continue
+                    else:
+                        print(f"⚠️ Batch size already at minimum, skipping this batch for @{handle}")
+                        break
+                
+                # Reset failure counter on success
+                consecutive_failures = 0
                 
                 batch_posts = response.feed
                 total_fetched += len(batch_posts)
@@ -271,10 +289,12 @@ class BlueskyClient:
             timestamps = []
             cursor = None
             total_fetched = 0
+            consecutive_failures = 0
+            max_consecutive_failures = 3
             
             while True:
-                # Prepare request parameters
-                params = {'actor': handle, 'limit': 100}  # Max allowed by API
+                # Prepare request parameters - use smaller batch to reduce video embed issues
+                params = {'actor': handle, 'limit': 20}  # Smaller batch to reduce video embed issues
                 if cursor:
                     params['cursor'] = cursor
                 
@@ -287,8 +307,24 @@ class BlueskyClient:
                 
                 # Handle case where response is None due to video embed issues
                 if response is None:
-                    print(f"⚠️ Skipping batch due to video embed validation errors for @{handle}")
-                    break
+                    consecutive_failures += 1
+                    print(f"⚠️ Batch failed due to video embed validation errors for @{handle} (failure {consecutive_failures}/{max_consecutive_failures})")
+                    
+                    if consecutive_failures >= max_consecutive_failures:
+                        print(f"⚠️ Too many consecutive failures for @{handle}, stopping")
+                        break
+                    
+                    # Try with a smaller limit next time
+                    if params['limit'] > 5:
+                        params['limit'] = max(5, params['limit'] // 2)
+                        print(f"🔄 Reducing batch size to {params['limit']} for @{handle}")
+                        continue
+                    else:
+                        print(f"⚠️ Batch size already at minimum, skipping this batch for @{handle}")
+                        break
+                
+                # Reset failure counter on success
+                consecutive_failures = 0
                 
                 batch_posts = response.feed
                 total_fetched += len(batch_posts)
