@@ -171,27 +171,13 @@ class BlueskyClient:
         
         try:
             print(f"🔐 Attempting login with username: {self.username}")
-            
-            # Add timeout to prevent hanging
-            import asyncio
-            try:
-                await asyncio.wait_for(
-                    asyncio.to_thread(self.client.login, self.username, self.password),
-                    timeout=30.0
-                )
-                print(f"✅ Logged in as {self.username}")
-            except asyncio.TimeoutError:
-                print("❌ Login timed out after 30 seconds")
-                raise Exception("Login timeout - check network connection and credentials")
-                
+            self.client.login(self.username, self.password)
+            print(f"✅ Logged in as {self.username}")
         except Exception as e:
             print(f"❌ Login failed: {e}")
             print(f"❌ Error type: {type(e)}")
             print(f"❌ Error details: {str(e)}")
-            # Don't crash the process, just return False to indicate login failed
-            return False
-        
-        return True
+            raise
 
     async def get_notifications(self, limit: int = 20) -> List[Dict[str, Any]]:
         """Fetch recent notifications including mentions."""
@@ -238,18 +224,8 @@ class BlueskyClient:
                         break
                         
                 except Exception as e:
-                    error_str = str(e)
-                    if "union_tag_invalid" in error_str and "app.bsky.embed.video#view" in error_str:
-                        print(f"⚠️ Video embed validation error for @{handle}, trying smaller batch...")
-                        if params.get('limit', 20) > 5:
-                            params['limit'] = 5
-                            continue
-                        else:
-                            print(f"❌ Failed to fetch posts even with small batch for @{handle}")
-                            break
-                    else:
-                        print(f"❌ Error fetching posts for @{handle}: {e}")
-                        break
+                    print(f"❌ Error fetching posts for @{handle}: {e}")
+                    break
                 
                 batch_posts = response.feed
                 total_fetched += len(batch_posts)
@@ -337,18 +313,8 @@ class BlueskyClient:
                     cursor = response.cursor if hasattr(response, 'cursor') else None
                         
                 except Exception as e:
-                    error_str = str(e)
-                    if "union_tag_invalid" in error_str and "app.bsky.embed.video#view" in error_str:
-                        print(f"⚠️ Video embed validation error for @{handle}, trying smaller batch...")
-                        if params.get('limit', 20) > 5:
-                            params['limit'] = 5
-                            continue
-                        else:
-                            print(f"❌ Failed to fetch posts even with small batch for @{handle}")
-                            break
-                    else:
-                        print(f"❌ Error fetching timestamps for @{handle}: {e}")
-                        break
+                    print(f"❌ Error fetching timestamps for @{handle}: {e}")
+                    break
                 
                 # Check if we have more posts to fetch
                 if cursor:
@@ -551,13 +517,8 @@ class BlueskyClient:
             
             # Check if we've already processed this notification
             if notification_id and notification_id in self.processed_notifications:
-                print(f"⏭️ Already processed notification {notification_id[:50]}..., skipping")
+                print(f"⏭️ Already processed notification {notification_id}, skipping")
                 return
-            
-            # Add to processed notifications immediately to prevent duplicate processing
-            if notification_id:
-                self.processed_notifications.add(notification_id)
-                self._save_processed_notifications()
             
             # Get author handle from notification
             author_handle = "user"  # Default
@@ -711,10 +672,7 @@ class BlueskyClient:
 
     async def start_monitoring(self):
         """Start monitoring mentions for the bot."""
-        login_success = await self.login()
-        if not login_success:
-            print("❌ Failed to login, exiting monitoring")
-            return
+        await self.login()
         
         # Initialize persistence data after login
         self._initialize_persistence()
@@ -771,17 +729,12 @@ class BlueskyClient:
                 
                 print(f"📬 Found {len(notifications)} notifications")
                 
-                # Only show notification details if there are new ones to process
-                if len(notifications) > 0:
-                    print(f"📬 Found {len(notifications)} notifications")
-                    # Debug: Show all notification details
-                    for i, notification in enumerate(notifications[:5]):  # Show first 5
-                        reason = getattr(notification, 'reason', 'unknown')
-                        indexed_at = getattr(notification, 'indexed_at', 'unknown')
-                        uri = getattr(notification, 'uri', 'unknown')[:50]
-                        print(f"  {i+1}. Reason: {reason}, Time: {indexed_at}, URI: {uri}...")
-                else:
-                    print("📬 No notifications found")
+                # Debug: Show all notification details
+                for i, notification in enumerate(notifications[:5]):  # Show first 5
+                    reason = getattr(notification, 'reason', 'unknown')
+                    indexed_at = getattr(notification, 'indexed_at', 'unknown')
+                    uri = getattr(notification, 'uri', 'unknown')[:50]
+                    print(f"  {i+1}. Reason: {reason}, Time: {indexed_at}, URI: {uri}...")
                 
                 # Filter notifications based on timestamp and processed set
                 filtered_notifications = []
@@ -793,6 +746,7 @@ class BlueskyClient:
                     
                     # Skip if we've already processed this notification
                     if notification_uri in self.processed_notifications:
+                        print(f"⏭️ Skipping already processed notification: {notification_uri[:50]}...")
                         continue
                     
                     # Only process mentions that arrived AFTER the bot started
@@ -801,6 +755,7 @@ class BlueskyClient:
                         try:
                             notification_dt = datetime.fromisoformat(notification_time.replace('Z', '+00:00'))
                             if notification_dt < self.bot_start_time:
+                                print(f"⏭️ Skipping notification from before bot started: {notification_time}")
                                 continue
                         except Exception as e:
                             print(f"⚠️ Error parsing notification timestamp {notification_time}: {e}")
@@ -809,10 +764,7 @@ class BlueskyClient:
                     filtered_notifications.append(notification)
                 
                 notifications = filtered_notifications
-                if len(notifications) > 0:
-                    print(f"📬 After filtering: {len(notifications)} new notifications")
-                else:
-                    print("📬 No new notifications to process")
+                print(f"📬 After filtering: {len(notifications)} new notifications")
                 
                 for notification in notifications:
                     # Debug: print notification type and reason
@@ -831,19 +783,11 @@ class BlueskyClient:
                     print("📝 Marked all notifications as read for this cycle")
                 except Exception as e:
                     print(f"⚠️ Could not mark notifications as read: {e}")
-                    # Don't fail the entire cycle if mark as read fails
-                
-                # Save current state after each cycle
-                self._save_last_timestamp()
-                self._save_processed_notifications()
                 
                 # Display queue statistics
                 stats = queue_manager.get_stats()
                 if stats["queue_length"] > 0 or stats["processing"]:
                     print(f"📊 Queue: {stats['queue_length']} pending, {stats['total_requests']} total, {stats['successful_requests']} success, {stats['failed_requests']} failed")
-                
-                # Keep-alive ping for Railway
-                print("💓 Keep-alive ping - container still running")
                 
                 # Wait before next check
                 await asyncio.sleep(30)  # Check every 30 seconds
