@@ -224,8 +224,18 @@ class BlueskyClient:
                         break
                         
                 except Exception as e:
-                    print(f"❌ Error fetching posts for @{handle}: {e}")
-                    break
+                    error_str = str(e)
+                    if "union_tag_invalid" in error_str and "app.bsky.embed.video#view" in error_str:
+                        print(f"⚠️ Video embed validation error for @{handle}, trying smaller batch...")
+                        if params.get('limit', 20) > 5:
+                            params['limit'] = 5
+                            continue
+                        else:
+                            print(f"❌ Failed to fetch posts even with small batch for @{handle}")
+                            break
+                    else:
+                        print(f"❌ Error fetching posts for @{handle}: {e}")
+                        break
                 
                 batch_posts = response.feed
                 total_fetched += len(batch_posts)
@@ -313,8 +323,18 @@ class BlueskyClient:
                     cursor = response.cursor if hasattr(response, 'cursor') else None
                         
                 except Exception as e:
-                    print(f"❌ Error fetching timestamps for @{handle}: {e}")
-                    break
+                    error_str = str(e)
+                    if "union_tag_invalid" in error_str and "app.bsky.embed.video#view" in error_str:
+                        print(f"⚠️ Video embed validation error for @{handle}, trying smaller batch...")
+                        if params.get('limit', 20) > 5:
+                            params['limit'] = 5
+                            continue
+                        else:
+                            print(f"❌ Failed to fetch posts even with small batch for @{handle}")
+                            break
+                    else:
+                        print(f"❌ Error fetching timestamps for @{handle}: {e}")
+                        break
                 
                 # Check if we have more posts to fetch
                 if cursor:
@@ -517,8 +537,13 @@ class BlueskyClient:
             
             # Check if we've already processed this notification
             if notification_id and notification_id in self.processed_notifications:
-                print(f"⏭️ Already processed notification {notification_id}, skipping")
+                print(f"⏭️ Already processed notification {notification_id[:50]}..., skipping")
                 return
+            
+            # Add to processed notifications immediately to prevent duplicate processing
+            if notification_id:
+                self.processed_notifications.add(notification_id)
+                self._save_processed_notifications()
             
             # Get author handle from notification
             author_handle = "user"  # Default
