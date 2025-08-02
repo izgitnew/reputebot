@@ -656,6 +656,15 @@ class BlueskyClient:
             except Exception as e:
                 print(f"⚠️ Error removing reset file: {e}")
         
+        # Force reset if environment variable is set
+        if os.getenv('FORCE_RESET', 'false').lower() == 'true':
+            print("🔄 FORCE_RESET detected, clearing all persistence data...")
+            self._reset_persistence()
+            # Clear the processed notifications set in memory
+            self.processed_notifications.clear()
+            self.last_processed_timestamp = None
+            print("🔄 Memory cleared - starting completely fresh")
+        
         print("📡 Starting mention monitoring...")
         print(f"🤖 Bot handle: @{self.username}")
         print("💬 Will respond to posts that mention the bot")
@@ -677,6 +686,13 @@ class BlueskyClient:
                 notifications = await self.get_notifications()
                 
                 print(f"📬 Found {len(notifications)} notifications")
+                
+                # Debug: Show all notification details
+                for i, notification in enumerate(notifications[:5]):  # Show first 5
+                    reason = getattr(notification, 'reason', 'unknown')
+                    indexed_at = getattr(notification, 'indexed_at', 'unknown')
+                    uri = getattr(notification, 'uri', 'unknown')[:50]
+                    print(f"  {i+1}. Reason: {reason}, Time: {indexed_at}, URI: {uri}...")
                 
                 # Filter notifications based on timestamp and processed set
                 filtered_notifications = []
