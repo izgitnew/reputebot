@@ -23,9 +23,13 @@ async def start_http_server():
     async def health_check(request):
         return web.Response(text="Bot is running! 🚀")
     
+    async def keep_alive(request):
+        return web.Response(text="Keep-alive ping! 💓")
+    
     app = web.Application()
     app.router.add_get('/', health_check)
     app.router.add_get('/health', health_check)
+    app.router.add_get('/ping', keep_alive)
     
     runner = web.AppRunner(app)
     await runner.setup()
@@ -66,15 +70,8 @@ async def main():
         bluesky_client.response_generator = response_generator
         
         print("🚀 Starting monitoring...")
-        # Run both HTTP server and bot monitoring concurrently
-        bot_task = asyncio.create_task(bluesky_client.start_monitoring())
-        
-        # Keep the HTTP server running indefinitely
-        while True:
-            await asyncio.sleep(1)
-            if bot_task.done():
-                print("❌ Bot monitoring stopped unexpectedly")
-                break
+        # Run bot monitoring and keep HTTP server alive
+        await bluesky_client.start_monitoring()
     except KeyboardInterrupt:
         print("\nShutting down gracefully...")
     except Exception as e:
