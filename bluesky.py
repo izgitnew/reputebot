@@ -171,8 +171,19 @@ class BlueskyClient:
         
         try:
             print(f"🔐 Attempting login with username: {self.username}")
-            self.client.login(self.username, self.password)
-            print(f"✅ Logged in as {self.username}")
+            
+            # Add timeout to prevent hanging
+            import asyncio
+            try:
+                await asyncio.wait_for(
+                    asyncio.to_thread(self.client.login, self.username, self.password),
+                    timeout=30.0
+                )
+                print(f"✅ Logged in as {self.username}")
+            except asyncio.TimeoutError:
+                print("❌ Login timed out after 30 seconds")
+                raise Exception("Login timeout - check network connection and credentials")
+                
         except Exception as e:
             print(f"❌ Login failed: {e}")
             print(f"❌ Error type: {type(e)}")

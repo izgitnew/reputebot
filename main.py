@@ -4,6 +4,7 @@ Main entry point for the Bluesky sentiment analysis bot.
 """
 
 import os
+import sys
 import asyncio
 from dotenv import load_dotenv
 from bluesky import BlueskyClient
@@ -19,6 +20,12 @@ async def main():
     print("Starting Bluesky Sentiment Analysis Bot...")
     
     try:
+        # Health check - print environment info
+        print("🔍 Health check:")
+        print(f"   Python version: {sys.version}")
+        print(f"   Working directory: {os.getcwd()}")
+        print(f"   Files in directory: {os.listdir('.')}")
+        
         # Initialize components
         print("🔧 Initializing components...")
         sentiment_analyzer = SentimentAnalyzer()
