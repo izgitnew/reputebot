@@ -215,8 +215,8 @@ class BlueskyClient:
                     import aiohttp
                     import json
                     
-                    # Get the session from the client
-                    session = self.client._session
+                    # Create a new session since the client doesn't expose it
+                    session = aiohttp.ClientSession()
                     base_url = "https://bsky.social/xrpc/app.bsky.feed.getAuthorFeed"
                     
                     # Prepare headers
@@ -226,39 +226,40 @@ class BlueskyClient:
                     }
                     
                     # Make raw request
-                    async with session.post(base_url, headers=headers, json=params) as resp:
-                        if resp.status == 200:
-                            raw_data = await resp.json()
-                            
-                            # Manually filter out posts with video embeds
-                            filtered_feed = []
-                            for item in raw_data.get('feed', []):
-                                post = item.get('post', {})
-                                embed = post.get('embed')
+                    async with aiohttp.ClientSession() as session:
+                        async with session.post(base_url, headers=headers, json=params) as resp:
+                            if resp.status == 200:
+                                raw_data = await resp.json()
                                 
-                                # Skip posts with video embeds
-                                if embed and embed.get('$type') == 'app.bsky.embed.video#view':
-                                    continue
-                                
-                                # Create a simple post object with just the text and timestamp
-                                if 'record' in post and 'text' in post['record']:
-                                    filtered_feed.append({
-                                        'post': {
-                                            'record': {
-                                                'text': post['record']['text'],
-                                                'created_at': post['record']['created_at']
+                                # Manually filter out posts with video embeds
+                                filtered_feed = []
+                                for item in raw_data.get('feed', []):
+                                    post = item.get('post', {})
+                                    embed = post.get('embed')
+                                    
+                                    # Skip posts with video embeds
+                                    if embed and embed.get('$type') == 'app.bsky.embed.video#view':
+                                        continue
+                                    
+                                    # Create a simple post object with just the text and timestamp
+                                    if 'record' in post and 'text' in post['record']:
+                                        filtered_feed.append({
+                                            'post': {
+                                                'record': {
+                                                    'text': post['record']['text'],
+                                                    'created_at': post['record']['created_at']
+                                                }
                                             }
-                                        }
-                                    })
-                            
-                            # Convert to a simple response object
-                            response = type('Response', (), {
-                                'feed': filtered_feed,
-                                'cursor': raw_data.get('cursor')
-                            })()
-                        else:
-                            print(f"❌ HTTP error {resp.status} for @{handle}")
-                            break
+                                        })
+                                
+                                # Convert to a simple response object
+                                response = type('Response', (), {
+                                    'feed': filtered_feed,
+                                    'cursor': raw_data.get('cursor')
+                                })()
+                            else:
+                                print(f"❌ HTTP error {resp.status} for @{handle}")
+                                break
                             
                 except ImportError:
                     print(f"⚠️ aiohttp not available, falling back to atproto method for @{handle}")
@@ -340,8 +341,8 @@ class BlueskyClient:
                     import aiohttp
                     import json
                     
-                    # Get the session from the client
-                    session = self.client._session
+                    # Create a new session since the client doesn't expose it
+                    session = aiohttp.ClientSession()
                     base_url = "https://bsky.social/xrpc/app.bsky.feed.getAuthorFeed"
                     
                     # Prepare headers
@@ -351,34 +352,35 @@ class BlueskyClient:
                     }
                     
                     # Make raw request
-                    async with session.post(base_url, headers=headers, json=params) as resp:
-                        if resp.status == 200:
-                            raw_data = await resp.json()
-                            
-                            # Manually filter out posts with video embeds and extract timestamps
-                            for item in raw_data.get('feed', []):
-                                post = item.get('post', {})
-                                embed = post.get('embed')
+                    async with aiohttp.ClientSession() as session:
+                        async with session.post(base_url, headers=headers, json=params) as resp:
+                            if resp.status == 200:
+                                raw_data = await resp.json()
                                 
-                                # Skip posts with video embeds
-                                if embed and embed.get('$type') == 'app.bsky.embed.video#view':
-                                    continue
+                                # Manually filter out posts with video embeds and extract timestamps
+                                for item in raw_data.get('feed', []):
+                                    post = item.get('post', {})
+                                    embed = post.get('embed')
+                                    
+                                    # Skip posts with video embeds
+                                    if embed and embed.get('$type') == 'app.bsky.embed.video#view':
+                                        continue
+                                    
+                                    # Extract timestamp
+                                    if 'record' in post and 'created_at' in post['record']:
+                                        timestamp = post['record']['created_at']
+                                        post_time = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                                        if post_time >= cutoff_time:
+                                            timestamps.append(timestamp)
+                                        else:
+                                            # Found old post, stop processing
+                                            break
                                 
-                                # Extract timestamp
-                                if 'record' in post and 'created_at' in post['record']:
-                                    timestamp = post['record']['created_at']
-                                    post_time = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
-                                    if post_time >= cutoff_time:
-                                        timestamps.append(timestamp)
-                                    else:
-                                        # Found old post, stop processing
-                                        break
-                            
-                            # Get cursor for next batch
-                            cursor = raw_data.get('cursor')
-                        else:
-                            print(f"❌ HTTP error {resp.status} for @{handle}")
-                            break
+                                # Get cursor for next batch
+                                cursor = raw_data.get('cursor')
+                            else:
+                                print(f"❌ HTTP error {resp.status} for @{handle}")
+                                break
                             
                 except ImportError:
                     print(f"⚠️ aiohttp not available, falling back to atproto method for @{handle}")
@@ -854,14 +856,17 @@ class BlueskyClient:
                             continue
                     
                     # Filter: only process mentions that arrived AFTER the bot started
+                    # Temporarily disabled to allow processing recent mentions
                     from datetime import datetime, timedelta, timezone
                     if notification_time and self.bot_start_time:
                         try:
                             notification_dt = datetime.fromisoformat(notification_time.replace('Z', '+00:00'))
                             
                             # Only process mentions that arrived after the bot started
-                            if notification_dt < self.bot_start_time:
-                                print(f"⏭️ Skipping notification from before bot started: {notification_time}")
+                            # Temporarily allow mentions from the last 2 hours for testing
+                            cutoff_time = datetime.now(timezone.utc) - timedelta(hours=2)
+                            if notification_dt < cutoff_time:
+                                print(f"⏭️ Skipping notification older than 2 hours: {notification_time}")
                                 continue
                         except Exception as e:
                             print(f"⚠️ Error parsing notification timestamp {notification_time}: {e}")
