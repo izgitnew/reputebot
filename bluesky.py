@@ -94,6 +94,29 @@ class BlueskyClient:
         # Load processed notifications from file
         self._load_processed_notifications()
     
+    def _reset_persistence(self):
+        """Reset persistence data to start fresh."""
+        self.last_processed_timestamp = None
+        self.processed_notifications.clear()
+        
+        # Delete persistence files
+        import os
+        try:
+            if os.path.exists('last_processed_timestamp.txt'):
+                os.remove('last_processed_timestamp.txt')
+                print("🗑️ Deleted last_processed_timestamp.txt")
+        except Exception as e:
+            print(f"⚠️ Error deleting timestamp file: {e}")
+        
+        try:
+            if os.path.exists('processed_notifications.txt'):
+                os.remove('processed_notifications.txt')
+                print("🗑️ Deleted processed_notifications.txt")
+        except Exception as e:
+            print(f"⚠️ Error deleting notifications file: {e}")
+        
+        print("🔄 Persistence data reset - will process all mentions from now on")
+    
     def load_feeds(self) -> List[Dict[str, Any]]:
         """Load feeds configuration from feeds.json."""
         try:
@@ -468,6 +491,7 @@ class BlueskyClient:
                 author_handle = notification.post.author.handle
             
             print(f"👀 Processing mention from @{author_handle}...")
+            print(f"🔍 Determining which account to analyze...")
             
             # Determine which account to analyze
             target_handle = await self._get_target_account_for_analysis(notification)
@@ -477,6 +501,7 @@ class BlueskyClient:
                 target_handle = author_handle
             
             print(f"🎯 Analyzing account: @{target_handle}")
+            print(f"📋 Target account for reputation analysis: @{target_handle}")
             
             # Fetch recent posts from the target account
             target_posts = await self.get_author_posts(target_handle, days_back=30)
@@ -619,6 +644,12 @@ class BlueskyClient:
         # Initialize persistence data after login
         self._initialize_persistence()
         
+        # Check if we should reset persistence (for debugging)
+        import os
+        if os.getenv('RESET_PERSISTENCE', 'false').lower() == 'true':
+            print("🔄 Reset flag detected, clearing persistence data...")
+            self._reset_persistence()
+        
         print("📡 Starting mention monitoring...")
         print(f"🤖 Bot handle: @{self.username}")
         print("💬 Will respond to posts that mention the bot")
@@ -643,9 +674,13 @@ class BlueskyClient:
                 
                 # Filter notifications based on timestamp and processed set
                 filtered_notifications = []
+                print(f"🔍 Current last processed timestamp: {self.last_processed_timestamp}")
+                
                 for notification in notifications:
                     notification_time = getattr(notification, 'indexed_at', None)
                     notification_uri = getattr(notification, 'uri', None)
+                    
+                    print(f"🔍 Notification time: {notification_time}, URI: {notification_uri[:50]}...")
                     
                     # Skip if we've already processed this notification
                     if notification_uri in self.processed_notifications:
