@@ -848,29 +848,17 @@ class BlueskyClient:
                         print(f"⏭️ Skipping already processed notification: {notification_uri[:50]}...")
                         continue
                     
-                    # Skip if notification is older than our last processed timestamp
-                    # Use < instead of <= to allow processing notifications with the same timestamp
-                    if self.last_processed_timestamp and notification_time:
-                        if notification_time < self.last_processed_timestamp:
-                            print(f"⏭️ Skipping old notification from {notification_time}")
-                            continue
-                    
-                    # Filter: only process mentions that arrived AFTER the bot started
-                    # Temporarily disabled to allow processing recent mentions
+                    # Simple filter: only process mentions from the last 2 hours
                     from datetime import datetime, timedelta, timezone
-                    if notification_time and self.bot_start_time:
+                    if notification_time:
                         try:
                             notification_dt = datetime.fromisoformat(notification_time.replace('Z', '+00:00'))
-                            
-                            # Only process mentions that arrived after the bot started
-                            # Temporarily allow mentions from the last 2 hours for testing
                             cutoff_time = datetime.now(timezone.utc) - timedelta(hours=2)
                             if notification_dt < cutoff_time:
                                 print(f"⏭️ Skipping notification older than 2 hours: {notification_time}")
                                 continue
                         except Exception as e:
                             print(f"⚠️ Error parsing notification timestamp {notification_time}: {e}")
-                            # If we can't parse the timestamp, skip it to be safe
                             continue
                     
                     filtered_notifications.append(notification)
