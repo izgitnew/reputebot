@@ -6,12 +6,9 @@ Bluesky bot client for interacting with AT Protocol, monitoring feeds, analyzing
 import os
 import asyncio
 import json
-from dotenv import load_dotenv
 from atproto import Client
 from typing import List, Dict, Any
 from queue_manager import queue_manager, RequestType
-
-load_dotenv()
 
 class BlueskyClient:
     """Bluesky bot for monitoring feeds, analyzing sentiment, and posting replies."""
@@ -34,10 +31,7 @@ class BlueskyClient:
         self.processed_notifications = set()
         # Track the latest notification timestamp we've processed
         self.last_processed_timestamp = None
-        # Load the last processed timestamp from file to persist between runs
-        self._load_last_timestamp()
-        # Load processed notifications from file
-        self._load_processed_notifications()
+        # Don't load files during initialization - will be loaded when monitoring starts
     
     def _load_last_timestamp(self):
         """Load the last processed timestamp from file."""
@@ -92,6 +86,13 @@ class BlueskyClient:
             print(f"📋 Saved {len(self.processed_notifications)} processed notifications")
         except Exception as e:
             print(f"⚠️ Error saving processed notifications: {e}")
+    
+    def _initialize_persistence(self):
+        """Initialize persistence data (called when monitoring starts)."""
+        # Load the last processed timestamp from file to persist between runs
+        self._load_last_timestamp()
+        # Load processed notifications from file
+        self._load_processed_notifications()
     
     def load_feeds(self) -> List[Dict[str, Any]]:
         """Load feeds configuration from feeds.json."""
@@ -589,6 +590,9 @@ class BlueskyClient:
     async def start_monitoring(self):
         """Start monitoring mentions for the bot."""
         await self.login()
+        
+        # Initialize persistence data after login
+        self._initialize_persistence()
         
         print("📡 Starting mention monitoring...")
         print(f"🤖 Bot handle: @{self.username}")
