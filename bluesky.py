@@ -516,15 +516,11 @@ class BlueskyClient:
             for i, post in enumerate(target_posts):
                 if hasattr(post, 'post') and hasattr(post.post, 'record') and hasattr(post.post.record, 'text'):
                     all_post_texts.append(post.post.record.text)
-                    print(f"✅ Found text in post.post.record.text: {post.post.record.text[:50]}...")
                 elif hasattr(post, 'record') and hasattr(post.record, 'text'):
                     all_post_texts.append(post.record.text)
-                    print(f"✅ Found text in post.record.text: {post.record.text[:50]}...")
                 elif hasattr(post, 'post') and hasattr(post.post, 'text'):
                     all_post_texts.append(post.post.text)
-                    print(f"✅ Found text in post.post.text: {post.post.text[:50]}...")
-                else:
-                    print(f"❌ No text found in post {i+1}")
+                # Removed noisy logging for individual post text extraction
             
             if not all_post_texts:
                 print(f"⚠️ No text found in posts from @{target_handle}")
@@ -650,6 +646,16 @@ class BlueskyClient:
             print("🔄 Reset flag detected, clearing persistence data...")
             self._reset_persistence()
         
+        # Also check for a simple reset file
+        if os.path.exists('reset_bot.txt'):
+            print("🔄 Reset file detected, clearing persistence data...")
+            self._reset_persistence()
+            try:
+                os.remove('reset_bot.txt')
+                print("🗑️ Removed reset file")
+            except Exception as e:
+                print(f"⚠️ Error removing reset file: {e}")
+        
         print("📡 Starting mention monitoring...")
         print(f"🤖 Bot handle: @{self.username}")
         print("💬 Will respond to posts that mention the bot")
@@ -679,8 +685,6 @@ class BlueskyClient:
                 for notification in notifications:
                     notification_time = getattr(notification, 'indexed_at', None)
                     notification_uri = getattr(notification, 'uri', None)
-                    
-                    print(f"🔍 Notification time: {notification_time}, URI: {notification_uri[:50]}...")
                     
                     # Skip if we've already processed this notification
                     if notification_uri in self.processed_notifications:
