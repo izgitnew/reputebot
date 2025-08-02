@@ -1,0 +1,67 @@
+{
+  "Tech Feed": {
+    "keywords": ["build", "code", "debug", "protocol", "dev", "api", "cli", "launch", "open source"],
+    "min_post_freq": 0.5,
+    "min_original_ratio": 0.6,
+    "description": "Software, devlogs, engineering updates"
+  },
+  "Book Feed": {
+    "keywords": ["read", "book", "chapter", "essay", "quote", "author", "library", "novel"],
+    "min_original_ratio": 0.5,
+    "description": "Reading lists, literary thoughts, longform discussion"
+  },
+  "Meme Feed": {
+    "keywords": ["lol", "lmao", "💀", "😭", "ratio", "banger", "meme", "shitpost"],
+    "description": "Low-effort, high-engagement chaos"
+  },
+  "Politics Feed": {
+    "keywords": ["election", "vote", "policy", "government", "congress", "candidate", "debate"],
+    "min_original_ratio": 0.4,
+    "description": "Political discussion and civic engagement"
+  },
+  "Crypto Feed": {
+    "keywords": ["blockchain", "wallet", "nft", "ethereum", "token", "solana", "ledger", "airdrops"],
+    "description": "Crypto talk, updates, and memes"
+  },
+  "AI Feed": {
+    "keywords": ["ai", "gpt", "openai", "model", "llm", "finetune", "prompt", "agent", "vector"],
+    "description": "AI development, prompts, and model exploration"
+  },
+  "IndieWeb Feed": {
+    "keywords": ["self-hosted", "rss", "fedi", "own your data", "p2p", "domain"],
+    "min_original_ratio": 0.7,
+    "description": "Decentralized web advocates and builders"
+  },
+  "Design Feed": {
+    "keywords": ["figma", "design", "typography", "layout", "ux", "mockup", "palette"],
+    "description": "Visual thinkers, product designers, UI/UX"
+  },
+  "Startup Feed": {
+    "keywords": ["founder", "startup", "bootstrap", "launch", "funding", "mrr", "pitch"],
+    "description": "Founders building in public"
+  },
+  "Wellness Feed": {
+    "keywords": ["sleep", "meditate", "run", "journal", "rest", "mental health", "walk"],
+    "description": "Self-care, mindfulness, and lifestyle improvement"
+  },
+  "Music Feed": {
+    "keywords": ["album", "track", "song", "playlist", "band", "listen", "guitar", "beats"],
+    "description": "Sharing what you’re listening to or creating"
+  },
+  "Gaming Feed": {
+    "keywords": ["game", "gaming", "zelda", "elden", "playstation", "steam", "fps", "controller"],
+    "description": "Gamers talking strategy, nostalgia, or liveplay"
+  },
+  "Visual Art Feed": {
+    "keywords": ["sketch", "draw", "illustration", "painting", "gallery", "print", "portfolio"],
+    "description": "Artists sharing their work or process"
+  },
+  "Food Feed": {
+    "keywords": ["cook", "recipe", "eat", "dinner", "dish", "restaurant", "kitchen"],
+    "description": "What’s cooking — meals, photos, recipes"
+  },
+  "Parenting Feed": {
+    "keywords": ["kids", "parent", "mom", "dad", "baby", "school", "bedtime", "family"],
+    "description": "Parents and caregivers sharing wins and chaos"
+  }
+}
