@@ -193,6 +193,11 @@ class BlueskyClient:
                     params
                 )
                 
+                # Handle case where response is None due to video embed issues
+                if response is None:
+                    print(f"⚠️ Skipping batch due to video embed validation errors for @{handle}")
+                    break
+                
                 batch_posts = response.feed
                 total_fetched += len(batch_posts)
                 
@@ -257,6 +262,11 @@ class BlueskyClient:
                     params
                 )
                 
+                # Handle case where response is None due to video embed issues
+                if response is None:
+                    print(f"⚠️ Skipping batch due to video embed validation errors for @{handle}")
+                    break
+                
                 batch_posts = response.feed
                 total_fetched += len(batch_posts)
                 
@@ -302,6 +312,12 @@ class BlueskyClient:
                 self.client.app.bsky.feed.get_post_thread,
                 {'uri': uri}
             )
+            
+            # Handle case where response is None due to video embed issues
+            if response is None:
+                print(f"⚠️ Skipping post thread due to video embed validation errors: {uri}")
+                return {}
+            
             return response.thread
         except Exception as e:
             print(f"❌ Error fetching post thread: {e}")

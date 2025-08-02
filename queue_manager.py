@@ -190,6 +190,15 @@ class QueueManager:
                 self.logger.info(f"Successfully executed {request.request_type.value}")
                 
             except Exception as e:
+                # Check if this is a validation error (video embed issue)
+                error_str = str(e)
+                if "union_tag_invalid" in error_str and "app.bsky.embed.video#view" in error_str:
+                    # This is a video embed validation error - handle gracefully
+                    self.logger.info(f"Skipping video embed in {request.request_type.value} (validation error)")
+                    request.result = None  # Return None instead of raising error
+                    self.stats["successful_requests"] += 1
+                    continue
+                
                 self.stats["failed_requests"] += 1
                 request.error = e
                 self.logger.error(f"Failed to execute {request.request_type.value}: {e}")
