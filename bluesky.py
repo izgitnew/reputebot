@@ -202,68 +202,68 @@ class BlueskyClient:
             all_posts = []
             cursor = None
             total_fetched = 0
-            consecutive_failures = 0
-            max_consecutive_failures = 3
             
             while True:
-                # Prepare request parameters - use smaller batch to reduce video embed issues
-                params = {'actor': handle, 'limit': 20}  # Smaller batch to reduce video embed issues
+                # Prepare request parameters
+                params = {'actor': handle, 'limit': 100}  # Use full batch size
                 if cursor:
                     params['cursor'] = cursor
                 
-                # Fetch batch of posts
-                response = await queue_manager.add_request(
-                    RequestType.GET_AUTHOR_POSTS,
-                    self.client.app.bsky.feed.get_author_feed,
-                    params
-                )
-                
-                # Handle case where response is None due to video embed issues
-                if response is None:
-                    consecutive_failures += 1
-                    print(f"⚠️ Batch failed due to video embed validation errors for @{handle} (failure {consecutive_failures}/{max_consecutive_failures})")
+                try:
+                    # Fetch batch of posts
+                    response = await queue_manager.add_request(
+                        RequestType.GET_AUTHOR_POSTS,
+                        self.client.app.bsky.feed.get_author_feed,
+                        params
+                    )
                     
-                    if consecutive_failures >= max_consecutive_failures:
-                        print(f"⚠️ Too many consecutive failures for @{handle}, stopping")
+                    if response is None:
+                        print(f"⚠️ Batch completely failed for @{handle}, skipping")
                         break
                     
-                    # Try with a smaller limit next time
-                    if params['limit'] > 5:
-                        params['limit'] = max(5, params['limit'] // 2)
-                        print(f"🔄 Reducing batch size to {params['limit']} for @{handle}")
-                        continue
-                    else:
-                        print(f"⚠️ Batch size already at minimum, skipping this batch for @{handle}")
+                    batch_posts = response.feed
+                    total_fetched += len(batch_posts)
+                    
+                    # Process each post individually to skip video embeds
+                    old_posts_found = False
+                    for post in batch_posts:
+                        try:
+                            # Check if this post has video embeds and skip it
+                            if hasattr(post, 'post') and hasattr(post.post, 'embed'):
+                                embed = post.post.embed
+                                if hasattr(embed, '$type') and 'video' in getattr(embed, '$type', ''):
+                                    print(f"⏭️ Skipping video post for @{handle}")
+                                    continue
+                            
+                            # Check timestamp
+                            if hasattr(post, 'post') and hasattr(post.post, 'record') and hasattr(post.post.record, 'created_at'):
+                                post_time = datetime.fromisoformat(post.post.record.created_at.replace('Z', '+00:00'))
+                                if post_time >= cutoff_time:
+                                    all_posts.append(post)
+                                else:
+                                    old_posts_found = True
+                                    break
+                            else:
+                                # If we can't get timestamp, include the post
+                                all_posts.append(post)
+                                
+                        except Exception as e:
+                            # Skip individual posts that cause errors (like video embeds)
+                            print(f"⏭️ Skipping problematic post for @{handle}: {str(e)[:50]}...")
+                            continue
+                    
+                    # If we found old posts, we've reached our time limit
+                    if old_posts_found:
                         break
-                
-                # Reset failure counter on success
-                consecutive_failures = 0
-                
-                batch_posts = response.feed
-                total_fetched += len(batch_posts)
-                
-                # Check if any posts in this batch are older than our cutoff
-                old_posts_found = False
-                for post in batch_posts:
-                    if hasattr(post, 'post') and hasattr(post.post, 'record') and hasattr(post.post.record, 'created_at'):
-                        post_time = datetime.fromisoformat(post.post.record.created_at.replace('Z', '+00:00'))
-                        if post_time >= cutoff_time:
-                            all_posts.append(post)
-                        else:
-                            old_posts_found = True
-                            break
+                    
+                    # Check if we have more posts to fetch
+                    if hasattr(response, 'cursor') and response.cursor:
+                        cursor = response.cursor
                     else:
-                        # If we can't get timestamp, include the post
-                        all_posts.append(post)
-                
-                # If we found old posts, we've reached our time limit
-                if old_posts_found:
-                    break
-                
-                # Check if we have more posts to fetch
-                if hasattr(response, 'cursor') and response.cursor:
-                    cursor = response.cursor
-                else:
+                        break
+                    
+                except Exception as e:
+                    print(f"⚠️ Error fetching batch for @{handle}: {e}")
                     break
                 
                 # Safety check to prevent infinite loops
@@ -289,66 +289,66 @@ class BlueskyClient:
             timestamps = []
             cursor = None
             total_fetched = 0
-            consecutive_failures = 0
-            max_consecutive_failures = 3
             
             while True:
-                # Prepare request parameters - use smaller batch to reduce video embed issues
-                params = {'actor': handle, 'limit': 20}  # Smaller batch to reduce video embed issues
+                # Prepare request parameters
+                params = {'actor': handle, 'limit': 100}  # Use full batch size
                 if cursor:
                     params['cursor'] = cursor
                 
-                # Fetch batch of posts
-                response = await queue_manager.add_request(
-                    RequestType.GET_AUTHOR_POSTS,
-                    self.client.app.bsky.feed.get_author_feed,
-                    params
-                )
-                
-                # Handle case where response is None due to video embed issues
-                if response is None:
-                    consecutive_failures += 1
-                    print(f"⚠️ Batch failed due to video embed validation errors for @{handle} (failure {consecutive_failures}/{max_consecutive_failures})")
+                try:
+                    # Fetch batch of posts
+                    response = await queue_manager.add_request(
+                        RequestType.GET_AUTHOR_POSTS,
+                        self.client.app.bsky.feed.get_author_feed,
+                        params
+                    )
                     
-                    if consecutive_failures >= max_consecutive_failures:
-                        print(f"⚠️ Too many consecutive failures for @{handle}, stopping")
+                    if response is None:
+                        print(f"⚠️ Batch completely failed for @{handle}, skipping")
                         break
                     
-                    # Try with a smaller limit next time
-                    if params['limit'] > 5:
-                        params['limit'] = max(5, params['limit'] // 2)
-                        print(f"🔄 Reducing batch size to {params['limit']} for @{handle}")
-                        continue
+                    batch_posts = response.feed
+                    total_fetched += len(batch_posts)
+                    
+                    # Extract only timestamps from posts within our time range
+                    old_posts_found = False
+                    for post in batch_posts:
+                        try:
+                            # Check if this post has video embeds and skip it
+                            if hasattr(post, 'post') and hasattr(post.post, 'embed'):
+                                embed = post.post.embed
+                                if hasattr(embed, '$type') and 'video' in getattr(embed, '$type', ''):
+                                    print(f"⏭️ Skipping video post for @{handle}")
+                                    continue
+                            
+                            # Extract timestamp
+                            if hasattr(post, 'post') and hasattr(post.post, 'record') and hasattr(post.post.record, 'created_at'):
+                                timestamp = post.post.record.created_at
+                                post_time = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                                if post_time >= cutoff_time:
+                                    timestamps.append(timestamp)
+                                else:
+                                    old_posts_found = True
+                                    break
+                                    
+                        except Exception as e:
+                            # Skip individual posts that cause errors (like video embeds)
+                            print(f"⏭️ Skipping problematic post for @{handle}: {str(e)[:50]}...")
+                            continue
+                    
+                    # If we found old posts, we've reached our time limit
+                    if old_posts_found:
+                        break
+                    
+                    # Check if we have more posts to fetch
+                    if hasattr(response, 'cursor') and response.cursor:
+                        cursor = response.cursor
                     else:
-                        print(f"⚠️ Batch size already at minimum, skipping this batch for @{handle}")
                         break
-                
-                # Reset failure counter on success
-                consecutive_failures = 0
-                
-                batch_posts = response.feed
-                total_fetched += len(batch_posts)
-                
-                # Extract only timestamps from posts within our time range
-                old_posts_found = False
-                for post in batch_posts:
-                    if hasattr(post, 'post') and hasattr(post.post, 'record') and hasattr(post.post.record, 'created_at'):
-                        timestamp = post.post.record.created_at
-                        post_time = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
-                        if post_time >= cutoff_time:
-                            timestamps.append(timestamp)
-                        else:
-                            old_posts_found = True
-                            break
-                
-                # If we found old posts, we've reached our time limit
-                if old_posts_found:
-                    break
-                
-                # Check if we have more posts to fetch
-                if hasattr(response, 'cursor') and response.cursor:
-                    cursor = response.cursor
-                else:
+                    
+                except Exception as e:
+                    print(f"⚠️ Error fetching batch for @{handle}: {e}")
                     break
                 
                 # Safety check to prevent infinite loops
@@ -703,8 +703,8 @@ class BlueskyClient:
         
         # Set the bot start time - only process mentions that arrive after this
         from datetime import datetime, timezone, timedelta
-        # Set bot start time to 1 hour ago to catch recent mentions but avoid old ones
-        self.bot_start_time = datetime.now(timezone.utc) - timedelta(hours=1)
+        # Set bot start time to 2 hours ago to catch recent mentions but avoid old ones
+        self.bot_start_time = datetime.now(timezone.utc) - timedelta(hours=2)
         print(f"🕐 Bot started at: {self.bot_start_time.isoformat()}")
         print(f"🕐 Current time: {datetime.now(timezone.utc).isoformat()}")
         print(f"🕐 Will process mentions after: {self.bot_start_time.isoformat()}")
