@@ -827,10 +827,17 @@ class BlueskyClient:
                     print(f"⚠️ Could not mark notifications as read: {e}")
                     # Don't fail the entire cycle if mark as read fails
                 
+                # Save current state after each cycle
+                self._save_last_timestamp()
+                self._save_processed_notifications()
+                
                 # Display queue statistics
                 stats = queue_manager.get_stats()
                 if stats["queue_length"] > 0 or stats["processing"]:
                     print(f"📊 Queue: {stats['queue_length']} pending, {stats['total_requests']} total, {stats['successful_requests']} success, {stats['failed_requests']} failed")
+                
+                # Keep-alive ping for Railway
+                print("💓 Keep-alive ping - container still running")
                 
                 # Wait before next check
                 await asyncio.sleep(30)  # Check every 30 seconds
