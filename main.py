@@ -66,8 +66,15 @@ async def main():
         bluesky_client.response_generator = response_generator
         
         print("🚀 Starting monitoring...")
-        # Start monitoring feeds
-        await bluesky_client.start_monitoring()
+        # Run both HTTP server and bot monitoring concurrently
+        bot_task = asyncio.create_task(bluesky_client.start_monitoring())
+        
+        # Keep the HTTP server running indefinitely
+        while True:
+            await asyncio.sleep(1)
+            if bot_task.done():
+                print("❌ Bot monitoring stopped unexpectedly")
+                break
     except KeyboardInterrupt:
         print("\nShutting down gracefully...")
     except Exception as e:

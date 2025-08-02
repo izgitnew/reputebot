@@ -188,7 +188,10 @@ class BlueskyClient:
             print(f"❌ Login failed: {e}")
             print(f"❌ Error type: {type(e)}")
             print(f"❌ Error details: {str(e)}")
-            raise
+            # Don't crash the process, just return False to indicate login failed
+            return False
+        
+        return True
 
     async def get_notifications(self, limit: int = 20) -> List[Dict[str, Any]]:
         """Fetch recent notifications including mentions."""
@@ -708,7 +711,10 @@ class BlueskyClient:
 
     async def start_monitoring(self):
         """Start monitoring mentions for the bot."""
-        await self.login()
+        login_success = await self.login()
+        if not login_success:
+            print("❌ Failed to login, exiting monitoring")
+            return
         
         # Initialize persistence data after login
         self._initialize_persistence()
