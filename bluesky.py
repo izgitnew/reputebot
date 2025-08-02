@@ -729,12 +729,17 @@ class BlueskyClient:
                 
                 print(f"📬 Found {len(notifications)} notifications")
                 
-                # Debug: Show all notification details
-                for i, notification in enumerate(notifications[:5]):  # Show first 5
-                    reason = getattr(notification, 'reason', 'unknown')
-                    indexed_at = getattr(notification, 'indexed_at', 'unknown')
-                    uri = getattr(notification, 'uri', 'unknown')[:50]
-                    print(f"  {i+1}. Reason: {reason}, Time: {indexed_at}, URI: {uri}...")
+                # Only show notification details if there are new ones to process
+                if len(notifications) > 0:
+                    print(f"📬 Found {len(notifications)} notifications")
+                    # Debug: Show all notification details
+                    for i, notification in enumerate(notifications[:5]):  # Show first 5
+                        reason = getattr(notification, 'reason', 'unknown')
+                        indexed_at = getattr(notification, 'indexed_at', 'unknown')
+                        uri = getattr(notification, 'uri', 'unknown')[:50]
+                        print(f"  {i+1}. Reason: {reason}, Time: {indexed_at}, URI: {uri}...")
+                else:
+                    print("📬 No notifications found")
                 
                 # Filter notifications based on timestamp and processed set
                 filtered_notifications = []
@@ -746,7 +751,6 @@ class BlueskyClient:
                     
                     # Skip if we've already processed this notification
                     if notification_uri in self.processed_notifications:
-                        print(f"⏭️ Skipping already processed notification: {notification_uri[:50]}...")
                         continue
                     
                     # Only process mentions that arrived AFTER the bot started
@@ -755,7 +759,6 @@ class BlueskyClient:
                         try:
                             notification_dt = datetime.fromisoformat(notification_time.replace('Z', '+00:00'))
                             if notification_dt < self.bot_start_time:
-                                print(f"⏭️ Skipping notification from before bot started: {notification_time}")
                                 continue
                         except Exception as e:
                             print(f"⚠️ Error parsing notification timestamp {notification_time}: {e}")
@@ -764,7 +767,10 @@ class BlueskyClient:
                     filtered_notifications.append(notification)
                 
                 notifications = filtered_notifications
-                print(f"📬 After filtering: {len(notifications)} new notifications")
+                if len(notifications) > 0:
+                    print(f"📬 After filtering: {len(notifications)} new notifications")
+                else:
+                    print("📬 No new notifications to process")
                 
                 for notification in notifications:
                     # Debug: print notification type and reason
@@ -783,6 +789,7 @@ class BlueskyClient:
                     print("📝 Marked all notifications as read for this cycle")
                 except Exception as e:
                     print(f"⚠️ Could not mark notifications as read: {e}")
+                    # Don't fail the entire cycle if mark as read fails
                 
                 # Display queue statistics
                 stats = queue_manager.get_stats()
