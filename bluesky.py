@@ -20,6 +20,14 @@ class BlueskyClient:
         self.client = Client()
         self.username = os.getenv('BLUESKY_HANDLE')
         self.password = os.getenv('BLUESKY_PASSWORD')
+        
+        # Debug: Check if environment variables are loaded
+        if not self.username or not self.password:
+            print("⚠️ Environment variables not found:")
+            print(f"   BLUESKY_HANDLE: {'Set' if self.username else 'Not set'}")
+            print(f"   BLUESKY_PASSWORD: {'Set' if self.password else 'Not set'}")
+            print("   Make sure these are set in Railway environment variables")
+        
         self.feeds = self.load_feeds()
         
         # Initialize analyzers (will be set by main.py)
@@ -123,7 +131,7 @@ class BlueskyClient:
     async def login(self):
         """Log in to the Bluesky account using app password."""
         if not self.username or not self.password:
-            raise ValueError("BLUESKY_HANDLE and BLUESKY_PASSWORD must be set in .env")
+            raise ValueError("BLUESKY_HANDLE and BLUESKY_PASSWORD must be set as environment variables (either in .env file or system environment)")
         try:
             self.client.login(self.username, self.password)
             print(f"✅ Logged in as {self.username}")
