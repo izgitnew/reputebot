@@ -160,8 +160,7 @@ class BlueskyClient:
             # Debug: Check if environment variables are loaded
             print(f"🔍 Debug - Environment variables:")
             print(f"   BLUESKY_HANDLE: '{self.username}' (length: {len(self.username) if self.username else 0})")
-            print(f"   BLUESKY_PASSWORD: '{self.password}' (length: {len(self.password) if self.password else 0})")
-            print(f"   BLUESKY_PASSWORD raw: {repr(self.password)}")
+            print(f"   BLUESKY_PASSWORD: {'*' * len(self.password) if self.password else 'Not set'} (length: {len(self.password) if self.password else 0})")
             print(f"   All env vars starting with BLUESKY: {[k for k in os.environ.keys() if k.startswith('BLUESKY')]}")
             
             if not self.username or not self.password:
@@ -822,6 +821,9 @@ class BlueskyClient:
                     if self.last_processed_timestamp and notification_time:
                         if notification_time <= self.last_processed_timestamp:
                             print(f"⏭️ Skipping old notification from {notification_time} (last processed: {self.last_processed_timestamp})")
+                            # Mark as processed to avoid repeating
+                            if notification_uri:
+                                self.processed_notifications.add(notification_uri)
                             continue
                     
                     # Only process mentions that arrived AFTER the bot started
@@ -832,9 +834,15 @@ class BlueskyClient:
                                 # Only log if we haven't logged many skips already
                                 if len([n for n in notifications if getattr(n, 'indexed_at', '') < notification_time]) < 5:
                                     print(f"⏭️ Skipping notification from before bot started: {notification_time}")
+                                # Mark as processed to avoid repeating
+                                if notification_uri:
+                                    self.processed_notifications.add(notification_uri)
                                 continue
                         except Exception as e:
                             print(f"⚠️ Error parsing notification timestamp {notification_time}: {e}")
+                            # Mark as processed to avoid repeating
+                            if notification_uri:
+                                self.processed_notifications.add(notification_uri)
                             continue
                     
                     filtered_notifications.append(notification)
@@ -852,6 +860,11 @@ class BlueskyClient:
                         await self.process_mention(notification)
                     else:
                         print(f"⏭️ Skipping notification type: {reason}")
+                
+                # Save processed notifications to avoid repeating
+                if len(self.processed_notifications) > 0:
+                    self._save_processed_notifications()
+                    print(f"💾 Saved {len(self.processed_notifications)} processed notifications")
                 
                 # Mark all notifications as read at the end of processing cycle
                 try:
