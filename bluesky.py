@@ -52,6 +52,9 @@ class BlueskyClient:
         except Exception as e:
             print(f"⚠️ Error loading timestamp: {e}")
             self.last_processed_timestamp = None
+        
+        # Debug: Show what we loaded
+        print(f"🔍 Debug - last_processed_timestamp: {self.last_processed_timestamp}")
     
     def _save_last_timestamp(self):
         """Save the last processed timestamp to file."""
@@ -623,6 +626,7 @@ class BlueskyClient:
                             print(f"📅 Updated latest processed timestamp: {notification_time}")
                             # Save the timestamp immediately
                             self._save_last_timestamp()
+                            print(f"💾 Saved timestamp to file")
                 else:
                     print("⚠️ Missing post URI or CID, cannot reply")
             else:
@@ -703,8 +707,8 @@ class BlueskyClient:
         
         # Set the bot start time - only process mentions that arrive after this
         from datetime import datetime, timezone, timedelta
-        # Set bot start time to 2 hours ago to catch recent mentions but avoid old ones
-        self.bot_start_time = datetime.now(timezone.utc) - timedelta(hours=2)
+        # Set bot start time to 24 hours ago to catch recent mentions but avoid very old ones
+        self.bot_start_time = datetime.now(timezone.utc) - timedelta(hours=24)
         print(f"🕐 Bot started at: {self.bot_start_time.isoformat()}")
         print(f"🕐 Current time: {datetime.now(timezone.utc).isoformat()}")
         print(f"🕐 Will process mentions after: {self.bot_start_time.isoformat()}")
@@ -756,7 +760,9 @@ class BlueskyClient:
                         try:
                             notification_dt = datetime.fromisoformat(notification_time.replace('Z', '+00:00'))
                             if notification_dt < self.bot_start_time:
-                                print(f"⏭️ Skipping notification from before bot started: {notification_time}")
+                                # Only log if we haven't logged many skips already
+                                if len([n for n in notifications if getattr(n, 'indexed_at', '') < notification_time]) < 5:
+                                    print(f"⏭️ Skipping notification from before bot started: {notification_time}")
                                 continue
                         except Exception as e:
                             print(f"⚠️ Error parsing notification timestamp {notification_time}: {e}")
