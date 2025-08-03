@@ -205,10 +205,12 @@ class BlueskyClient:
             all_posts = []
             cursor = None
             total_fetched = 0
+            consecutive_failures = 0
+            max_failures = 3
             
             while True:
-                # Prepare request parameters
-                params = {'actor': handle, 'limit': 100}  # Use full batch size
+                # Prepare request parameters - start with smaller batch to avoid video embed issues
+                params = {'actor': handle, 'limit': 20}  # Start with smaller batch
                 if cursor:
                     params['cursor'] = cursor
                 
@@ -221,8 +223,24 @@ class BlueskyClient:
                     )
                     
                     if response is None:
-                        print(f"⚠️ Batch completely failed for @{handle}, skipping")
-                        break
+                        consecutive_failures += 1
+                        print(f"⚠️ Batch failed for @{handle} (failure {consecutive_failures}/{max_failures})")
+                        
+                        if consecutive_failures >= max_failures:
+                            print(f"⚠️ Too many consecutive failures for @{handle}, giving up")
+                            break
+                        
+                        # Try with even smaller batch size
+                        if params['limit'] > 5:
+                            params['limit'] = max(5, params['limit'] // 2)
+                            print(f"🔄 Retrying with batch size {params['limit']} for @{handle}")
+                            continue
+                        else:
+                            print(f"⚠️ Even small batches failing for @{handle}, giving up")
+                            break
+                    
+                    # Reset failure counter on success
+                    consecutive_failures = 0
                     
                     batch_posts = response.feed
                     total_fetched += len(batch_posts)
@@ -292,10 +310,12 @@ class BlueskyClient:
             timestamps = []
             cursor = None
             total_fetched = 0
+            consecutive_failures = 0
+            max_failures = 3
             
             while True:
-                # Prepare request parameters
-                params = {'actor': handle, 'limit': 100}  # Use full batch size
+                # Prepare request parameters - start with smaller batch to avoid video embed issues
+                params = {'actor': handle, 'limit': 20}  # Start with smaller batch
                 if cursor:
                     params['cursor'] = cursor
                 
@@ -308,8 +328,24 @@ class BlueskyClient:
                     )
                     
                     if response is None:
-                        print(f"⚠️ Batch completely failed for @{handle}, skipping")
-                        break
+                        consecutive_failures += 1
+                        print(f"⚠️ Batch failed for @{handle} (failure {consecutive_failures}/{max_failures})")
+                        
+                        if consecutive_failures >= max_failures:
+                            print(f"⚠️ Too many consecutive failures for @{handle}, giving up")
+                            break
+                        
+                        # Try with even smaller batch size
+                        if params['limit'] > 5:
+                            params['limit'] = max(5, params['limit'] // 2)
+                            print(f"🔄 Retrying with batch size {params['limit']} for @{handle}")
+                            continue
+                        else:
+                            print(f"⚠️ Even small batches failing for @{handle}, giving up")
+                            break
+                    
+                    # Reset failure counter on success
+                    consecutive_failures = 0
                     
                     batch_posts = response.feed
                     total_fetched += len(batch_posts)
