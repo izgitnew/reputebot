@@ -633,7 +633,10 @@ class BlueskyClient:
             target_timestamps = await self.get_author_post_timestamps(target_handle, days_back=30)
             
             # Generate response based on target account's content
+            print(f"🔍 Generating response for @{target_handle}...")
             response = self.response_generator.generate_response(sentiment_result, vibe_result, combined_text, target_handle, target_timestamps)
+            
+            print(f"📝 Generated response: {response[:100]}..." if response else "❌ No response generated")
             
             if response:
                 # Get post details for reply
@@ -658,15 +661,25 @@ class BlueskyClient:
                 print(f"🔍 CID type: {type(post_cid)}")
                 
                 if post_uri and post_cid:
+                    print(f"🔍 Attempting to post reply...")
+                    print(f"🔍 URI: {post_uri}")
+                    print(f"🔍 CID: {post_cid}")
+                    
                     # Ensure CID is a string
                     if not isinstance(post_cid, str):
                         print(f"⚠️ CID is not a string: {post_cid}")
                         post_cid = str(post_cid)
                     
-                    await self.post_reply(response, post_uri, post_cid)
-                    print(f"✅ Replied to mention: {response[:50]}...")
-                    
-                    # Mark this notification as processed
+                    try:
+                        await self.post_reply(response, post_uri, post_cid)
+                        print(f"✅ Replied to mention: {response[:50]}...")
+                    except Exception as e:
+                        print(f"❌ Failed to post reply: {e}")
+                        print(f"❌ Error type: {type(e)}")
+                else:
+                    print(f"❌ Missing post URI or CID - URI: {post_uri}, CID: {post_cid}")
+                
+                # Mark this notification as processed
                     if notification_id:
                         self.processed_notifications.add(notification_id)
                         print(f"✅ Marked notification {notification_id} as processed")
@@ -683,8 +696,8 @@ class BlueskyClient:
                             # Save the timestamp immediately
                             self._save_last_timestamp()
                             print(f"💾 Saved timestamp to file")
-                else:
-                    print("⚠️ Missing post URI or CID, cannot reply")
+                    else:
+                        print("⚠️ Missing post URI or CID, cannot reply")
             else:
                 print("ℹ️ No response generated for this mention")
                 
