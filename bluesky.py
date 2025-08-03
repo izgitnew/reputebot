@@ -776,8 +776,8 @@ class BlueskyClient:
         
         # Set the bot start time - only process mentions that arrive after this
         from datetime import datetime, timezone, timedelta
-        # Set bot start time to 24 hours ago to catch recent mentions but avoid very old ones
-        self.bot_start_time = datetime.now(timezone.utc) - timedelta(hours=24)
+        # Set bot start time to NOW to only process new mentions
+        self.bot_start_time = datetime.now(timezone.utc)
         print(f"🕐 Bot started at: {self.bot_start_time.isoformat()}")
         print(f"🕐 Current time: {datetime.now(timezone.utc).isoformat()}")
         print(f"🕐 Will process mentions after: {self.bot_start_time.isoformat()}")
