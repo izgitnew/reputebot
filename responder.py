@@ -331,6 +331,7 @@ class ResponseGenerator:
             return None
         
         # Calculate actual posts per day if posts data is provided
+        posts_per_day = 1.0  # Default value
         if posts_data:
             posts_per_day = self._calculate_posts_per_day(posts_data)
             print(f"📊 Calculated posts per day: {posts_per_day}")
