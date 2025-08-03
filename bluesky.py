@@ -871,3 +871,49 @@ class BlueskyClient:
             except Exception as e:
                 print(f"❌ Error in mention monitoring: {e}")
                 await asyncio.sleep(60)  # Wait longer on error
+    
+    def _dict_to_post_object(self, post_data):
+        """Convert dictionary post data back to a simple object for compatibility."""
+        class SimplePost:
+            def __init__(self, data):
+                self.post = SimplePostContent(data.get('post', {}))
+        
+        class SimplePostContent:
+            def __init__(self, data):
+                self.record = SimpleRecord(data.get('record', {}))
+                self.embed = data.get('embed', None)
+        
+        class SimpleRecord:
+            def __init__(self, data):
+                self.created_at = data.get('createdAt', '')
+                self.text = data.get('text', '')
+        
+        return SimplePost(post_data)
+    
+    async def _fetch_posts_with_raw_http(self, handle: str, limit: int = 100):
+        """Fetch posts using raw HTTP requests to bypass video embed validation."""
+        try:
+            import aiohttp
+            
+            # Get the session from the client
+            session = self.client._session
+            
+            # Make raw HTTP request
+            url = "https://bsky.social/xrpc/app.bsky.feed.getAuthorFeed"
+            params = {'actor': handle, 'limit': limit}
+            headers = {
+                'Authorization': f'Bearer {self.client.session.access_jwt}',
+                'Content-Type': 'application/json'
+            }
+            
+            async with session.get(url, params=params, headers=headers) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    return data.get('feed', [])
+                else:
+                    print(f"⚠️ HTTP {response.status} error for @{handle}")
+                    return None
+                    
+        except Exception as e:
+            print(f"⚠️ Raw HTTP request failed for @{handle}: {e}")
+            return None
