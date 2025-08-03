@@ -813,7 +813,7 @@ class BlueskyClient:
                     
                     # Skip if we've already processed this notification
                     if notification_uri in self.processed_notifications:
-                        print(f"⏭️ Skipping already processed notification: {notification_uri[:50]}...")
+                        # Don't log every single skipped notification to reduce noise
                         continue
                     
                     # Skip if notification is older than our last processed timestamp
@@ -831,10 +831,7 @@ class BlueskyClient:
                         try:
                             notification_dt = datetime.fromisoformat(notification_time.replace('Z', '+00:00'))
                             if notification_dt < self.bot_start_time:
-                                # Only log if we haven't logged many skips already
-                                if len([n for n in notifications if getattr(n, 'indexed_at', '') < notification_time]) < 5:
-                                    print(f"⏭️ Skipping notification from before bot started: {notification_time}")
-                                # Mark as processed to avoid repeating
+                                # Mark as processed to avoid repeating (no logging to reduce noise)
                                 if notification_uri:
                                     self.processed_notifications.add(notification_uri)
                                 continue
@@ -848,7 +845,11 @@ class BlueskyClient:
                     filtered_notifications.append(notification)
                 
                 notifications = filtered_notifications
-                print(f"📬 After filtering: {len(notifications)} new notifications")
+                skipped_count = len([n for n in notifications if getattr(n, 'uri', None) in self.processed_notifications])
+                if skipped_count > 0:
+                    print(f"📬 After filtering: {len(notifications)} new notifications (skipped {skipped_count} already processed)")
+                else:
+                    print(f"📬 After filtering: {len(notifications)} new notifications")
                 
                 for notification in notifications:
                     # Debug: print notification type and reason
@@ -861,7 +862,7 @@ class BlueskyClient:
                     else:
                         print(f"⏭️ Skipping notification type: {reason}")
                 
-                # Save processed notifications to avoid repeating
+                # Save processed notifications to avoid repeating (only if we have new ones)
                 if len(self.processed_notifications) > 0:
                     self._save_processed_notifications()
                     print(f"💾 Saved {len(self.processed_notifications)} processed notifications")
