@@ -862,6 +862,14 @@ class BlueskyClient:
                     else:
                         print(f"⏭️ Skipping notification type: {reason}")
                 
+                # Update timestamp to the latest notification time (even if skipped)
+                if notifications:
+                    latest_time = max([getattr(n, 'indexed_at', '') for n in notifications if getattr(n, 'indexed_at', None)])
+                    if latest_time and (not self.last_processed_timestamp or latest_time > self.last_processed_timestamp):
+                        self.last_processed_timestamp = latest_time
+                        self._save_last_timestamp()
+                        print(f"📅 Updated timestamp to latest notification: {latest_time}")
+                
                 # Save processed notifications to avoid repeating (only if we have new ones)
                 if len(self.processed_notifications) > 0:
                     self._save_processed_notifications()
@@ -879,8 +887,12 @@ class BlueskyClient:
                 if stats["queue_length"] > 0 or stats["processing"]:
                     print(f"📊 Queue: {stats['queue_length']} pending, {stats['total_requests']} total, {stats['successful_requests']} success, {stats['failed_requests']} failed")
                 
-                # Wait before next check
-                await asyncio.sleep(30)  # Check every 30 seconds
+                # Wait before next check - longer wait if no new notifications
+                if len(notifications) == 0:
+                    print("😴 No notifications found, sleeping for 60 seconds...")
+                    await asyncio.sleep(60)  # Longer sleep when no notifications
+                else:
+                    await asyncio.sleep(30)  # Normal check every 30 seconds
                 
             except Exception as e:
                 print(f"❌ Error in mention monitoring: {e}")
