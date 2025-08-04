@@ -864,16 +864,38 @@ class BlueskyClient:
                 
                 # Update timestamp to the latest notification time (even if skipped)
                 if notifications:
-                    latest_time = max([getattr(n, 'indexed_at', '') for n in notifications if getattr(n, 'indexed_at', None)])
-                    if latest_time and (not self.last_processed_timestamp or latest_time > self.last_processed_timestamp):
-                        self.last_processed_timestamp = latest_time
-                        self._save_last_timestamp()
-                        print(f"📅 Updated timestamp to latest notification: {latest_time}")
+                    try:
+                        # Get all valid timestamps
+                        valid_timestamps = [getattr(n, 'indexed_at', '') for n in notifications if getattr(n, 'indexed_at', None)]
+                        if valid_timestamps:
+                            latest_time = max(valid_timestamps)
+                            print(f"🔍 Debug: Latest notification time: {latest_time}")
+                            print(f"🔍 Debug: Current timestamp: {self.last_processed_timestamp}")
+                            
+                            if not self.last_processed_timestamp or latest_time > self.last_processed_timestamp:
+                                self.last_processed_timestamp = latest_time
+                                self._save_last_timestamp()
+                                print(f"📅 Updated timestamp to latest notification: {latest_time}")
+                            else:
+                                print(f"📅 Timestamp already up to date: {self.last_processed_timestamp}")
+                        else:
+                            print("⚠️ No valid timestamps found in notifications")
+                    except Exception as e:
+                        print(f"❌ Error updating timestamp: {e}")
                 
                 # Save processed notifications to avoid repeating (only if we have new ones)
                 if len(self.processed_notifications) > 0:
-                    self._save_processed_notifications()
-                    print(f"💾 Saved {len(self.processed_notifications)} processed notifications")
+                    # Only save if we haven't already saved in this cycle
+                    if not hasattr(self, '_saved_this_cycle'):
+                        self._save_processed_notifications()
+                        print(f"💾 Saved {len(self.processed_notifications)} processed notifications")
+                        self._saved_this_cycle = True
+                    else:
+                        print(f"💾 Skipping save - already saved this cycle")
+                else:
+                    # Reset the flag for next cycle
+                    if hasattr(self, '_saved_this_cycle'):
+                        delattr(self, '_saved_this_cycle')
                 
                 # Mark all notifications as read at the end of processing cycle
                 try:
