@@ -799,15 +799,15 @@ class BlueskyClient:
         while True:
             try:
                 # Get notifications (mentions)
-                notifications = await self.get_notifications()
+                original_notifications = await self.get_notifications()
                 
-                print(f"📬 Found {len(notifications)} notifications")
+                print(f"📬 Found {len(original_notifications)} notifications")
                 
                 # Filter notifications based on timestamp and processed set
                 filtered_notifications = []
                 print(f"🔍 Current last processed timestamp: {self.last_processed_timestamp}")
                 
-                for notification in notifications:
+                for notification in original_notifications:
                     notification_time = getattr(notification, 'indexed_at', None)
                     notification_uri = getattr(notification, 'uri', None)
                     
@@ -863,10 +863,10 @@ class BlueskyClient:
                         print(f"⏭️ Skipping notification type: {reason}")
                 
                 # Update timestamp to the latest notification time (even if skipped)
-                if notifications:
+                if original_notifications:
                     try:
                         # Get all valid timestamps
-                        valid_timestamps = [getattr(n, 'indexed_at', '') for n in notifications if getattr(n, 'indexed_at', None)]
+                        valid_timestamps = [getattr(n, 'indexed_at', '') for n in original_notifications if getattr(n, 'indexed_at', None)]
                         if valid_timestamps:
                             latest_time = max(valid_timestamps)
                             print(f"🔍 Debug: Latest notification time: {latest_time}")
